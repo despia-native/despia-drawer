@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.corepack/
+.pnpm-store/
+.DS_Store
