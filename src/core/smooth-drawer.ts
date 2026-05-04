@@ -95,13 +95,11 @@ export class SmoothDrawer extends HTMLElement {
   private _currentDetent: DrawerDetent | null = null;
   private _lastOpenedDetent = 'medium';
   private _lastTrigger: DrawerTrigger = 'init';
-  private _pendingDetent: string | null = null;
   private _dragging = false;
 
   private _cachedClipPath = '';
   private _cachedBackdropOpacity = '';
   private _cachedBackdropInteractive: boolean | null = null;
-  private _cachedTrackActive: boolean | null = null;
   private _cachedFullyOpen: boolean | null = null;
   private _cachedShadow = '';
   private _cachedSnapMode = '';
@@ -334,15 +332,12 @@ export class SmoothDrawer extends HTMLElement {
     this._onVisualViewportResize = this._onVisualViewportResize.bind(this);
     this._onGuardViewportResize = this._onGuardViewportResize.bind(this);
     this._onGuardScroll = this._onGuardScroll.bind(this);
-    this._onUserScrollStart = this._onUserScrollStart.bind(this);
 
     this._resizeObserver = new ResizeObserver(this._updateLayout);
   }
 
   connectedCallback(): void {
     this._track.addEventListener('scroll', this._onScroll, { passive: true });
-    this._track.addEventListener('touchstart', this._onUserScrollStart, { passive: true });
-    this._track.addEventListener('wheel', this._onUserScrollStart, { passive: true });
     this._closedSpacer.addEventListener('click', this._onClosedClick);
     this._backdrop.addEventListener('click', this._onBackdropClick);
     this.addEventListener('focusin', this._onFocusIn);
@@ -358,8 +353,6 @@ export class SmoothDrawer extends HTMLElement {
 
   disconnectedCallback(): void {
     this._track.removeEventListener('scroll', this._onScroll);
-    this._track.removeEventListener('touchstart', this._onUserScrollStart);
-    this._track.removeEventListener('wheel', this._onUserScrollStart);
     this._closedSpacer.removeEventListener('click', this._onClosedClick);
     this._backdrop.removeEventListener('click', this._onBackdropClick);
     this.removeEventListener('focusin', this._onFocusIn);
@@ -559,7 +552,6 @@ export class SmoothDrawer extends HTMLElement {
     if (!target) return;
 
     this._lastTrigger = trigger;
-    this._pendingDetent = target.name;
     if (target.name !== 'closed') this._activateGuardsForActiveInput();
     this._emit('detent-changing', { targetDetent: target.name });
     this._track.scrollTo({
@@ -596,6 +588,8 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _activateOpenGuards(): void {
+    if (!this.isOpen || !this._focusedTextInput) return;
+
     if (!this._viewportGuardActive) {
       this._viewportGuardActive = true;
       this._viewportGuardScrollY = window.scrollY;
@@ -612,6 +606,8 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _activateGuardsForActiveInput(): void {
+    if (!this.isOpen) return;
+
     const active = document.activeElement;
     if (active instanceof HTMLElement && this.contains(active) && this._isTextInput(active)) {
       this._focusedTextInput = active;
@@ -649,12 +645,6 @@ export class SmoothDrawer extends HTMLElement {
     }
   }
 
-  private _onUserScrollStart(): void {
-    if (!this.isOpen) return;
-    this._lastTrigger = 'drag';
-    this._pendingDetent = null;
-  }
-
   private _emit(eventName: DrawerEventName, extraDetail: Partial<DrawerEventDetail> = {}): void {
     this.dispatchEvent(new CustomEvent(eventName, {
       bubbles: true,
@@ -664,14 +654,6 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _updateClipPath(): void {
-    if (this.classList.contains('backdrop-active')) {
-      if (this._cachedClipPath !== '') {
-        this._track.style.clipPath = '';
-        this._cachedClipPath = '';
-      }
-      return;
-    }
-
     const trackRect = this._track.getBoundingClientRect();
     const drawerRect = this._drawer.getBoundingClientRect();
     const top = Math.max(0, Math.round(drawerRect.top - trackRect.top - CLIP_SLACK));
@@ -746,30 +728,9 @@ export class SmoothDrawer extends HTMLElement {
     if (this._scrollTimeout !== null) clearTimeout(this._scrollTimeout);
     this._scrollTimeout = setTimeout(() => {
       this._dragging = false;
-      const settled = this._closestDetent(this._track.scrollTop);
+      const settled = this._detents.find(d => Math.abs(d.offset - this._track.scrollTop) < 5)
+        || this._closestDetent(this._track.scrollTop);
       if (!settled) return;
-
-      if (this._pendingDetent && settled.name !== this._pendingDetent && this._lastTrigger !== 'drag') {
-        const target = this._detents.find(d => d.name === this._pendingDetent);
-        if (target) {
-          this._track.scrollTo({ top: target.offset, behavior: 'smooth' });
-          return;
-        }
-      }
-
-      if (settled.name === this._pendingDetent) {
-        this._pendingDetent = null;
-      }
-
-      if (settled.name === 'closed' && this._lastTrigger === 'drag') {
-        const fallback = this._detents.find(d => d.name === this._lastOpenedDetent && d.name !== 'closed')
-          || this._detents.find(d => d.name !== 'closed')
-          || null;
-        if (fallback) {
-          this._goToDetent(fallback.name, true, 'drag');
-          return;
-        }
-      }
 
       const changed = this._currentDetent?.name !== settled.name;
       if (changed) {
@@ -786,12 +747,12 @@ export class SmoothDrawer extends HTMLElement {
           this._lastOpenedDetent = settled.name;
         }
 
-        this._setDespiaAutoScroll(settled.name === 'closed');
+        if (settled.name === 'closed' && !this._focusedTextInput) {
+          this._setDespiaAutoScroll(true);
+        }
         this._haptic(settled.height === this._largestHeight() && settled.name !== 'closed' ? 'heavy' : 'light');
         this._emit('detent-change');
       }
-
-      this._lastTrigger = 'drag';
 
       if (settled.name === 'closed') {
         this._deactivateOpenGuards();
@@ -905,12 +866,6 @@ export class SmoothDrawer extends HTMLElement {
     return this._detents[this._detents.length - 1]?.height || 0;
   }
 
-  private _setTrackActive(active: boolean): void {
-    if (active === this._cachedTrackActive) return;
-    this._track.classList.toggle('active', active);
-    this._cachedTrackActive = active;
-  }
-
   private _onFocusIn(event: FocusEvent): void {
     const target = event.composedPath()[0];
     if (!(target instanceof HTMLElement) || !this._isTextInput(target)) return;
@@ -949,6 +904,7 @@ export class SmoothDrawer extends HTMLElement {
   private _onVisualViewportResize(): void {
     if (!this.hasAttribute('smart-keyboard')) return;
     if (!this.isOpen || !this._focusedTextInput) {
+      this._deactivateOpenGuards();
       this.classList.remove('keyboard-active');
       this._setContentPadding('');
       return;
