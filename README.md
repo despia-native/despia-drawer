@@ -19,7 +19,7 @@ CDN:
 <script src="https://unpkg.com/@despia/drawer/dist/index.umd.js"></script>
 ```
 
-Demo: [open the vanilla demo on jsDelivr](https://cdn.jsdelivr.net/npm/@despia/drawer/examples/vanilla/index.html). It is served straight from the published npm package, so no separate demo hosting is required.
+Demo: [open the GitHub Pages preview](https://despia-native.github.io/despia-drawer/examples/vanilla/). The same demo is also available from the published package on [jsDelivr](https://cdn.jsdelivr.net/npm/@despia/drawer/examples/vanilla/index.html).
 
 ## Vanilla
 
@@ -212,7 +212,7 @@ pnpm build
 pnpm typecheck
 ```
 
-The vanilla demo lives at `examples/vanilla/index.html` and can be hosted with GitHub Pages after building.
+The vanilla demo lives at `examples/vanilla/index.html` and is deployed to GitHub Pages from the `main` branch.
 
 ## License
 
