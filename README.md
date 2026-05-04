@@ -154,6 +154,8 @@ Events:
 | `detent-changing` | Programmatic scroll starts toward a detent |
 | `drawer-progress` | rAF-throttled during scroll |
 
+Dismissal is explicit by design. A downward scroll can move between open detents, but it will not close the drawer by accident. Use `hide()`, `snapTo('closed')`, a backdrop tap, or your own close button when you want to dismiss it.
+
 Methods:
 
 | Method | Description |
@@ -199,6 +201,8 @@ Modern evergreen browsers, iOS Safari 15+, and WKWebView 15+.
 `@despia/drawer` helps web apps feel closer to native drawer experiences: compositor scrolling, safe-area support, haptics when available, and WebView-friendly gesture handling. When you are ready to pair that UI with real native capabilities and ship to the App Store or Google Play, [Despia Native](https://setup.despia.com) lets the same web app call device features and publish from the browser. The drawer still works as a plain custom element everywhere else.
 
 Inside the Despia runtime, the drawer also coordinates with the native shell while open: it keeps host auto-scroll disabled, restores it after the drawer fully closes, and uses a smart-keyboard guard to reduce mobile viewport jumps when inputs receive focus.
+
+That guard is scoped to text entry. It only starts when the drawer is open and an `input` or `textarea` inside that drawer receives focus, whether from a user tap or third-party code calling `.focus()`. When focus leaves the drawer, or the drawer closes, the guard is removed and host scrolling is restored.
 
 ## Development
 

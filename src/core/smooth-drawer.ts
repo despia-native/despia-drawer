@@ -110,6 +110,7 @@ export class SmoothDrawer extends HTMLElement {
   private _viewportGuardActive = false;
   private _viewportGuardScrollY = 0;
   private _fakeFocusInput: HTMLInputElement | null = null;
+  private _focusedTextInput: HTMLElement | null = null;
 
   private _smartKeyboard: SmartKeyboardState = {
     previousDetent: null,
@@ -342,6 +343,7 @@ export class SmoothDrawer extends HTMLElement {
     this._track.addEventListener('scroll', this._onScroll, { passive: true });
     this._closedSpacer.addEventListener('click', this._onClosedClick);
     this._backdrop.addEventListener('click', this._onBackdropClick);
+    this.addEventListener('touchstart', this._onGuardTouchStart, { capture: true, passive: false });
     this.addEventListener('focusin', this._onFocusIn);
     this.addEventListener('focusout', this._onFocusOut);
     window.addEventListener('resize', this._updateLayout);
@@ -357,6 +359,7 @@ export class SmoothDrawer extends HTMLElement {
     this._track.removeEventListener('scroll', this._onScroll);
     this._closedSpacer.removeEventListener('click', this._onClosedClick);
     this._backdrop.removeEventListener('click', this._onBackdropClick);
+    this.removeEventListener('touchstart', this._onGuardTouchStart, { capture: true });
     this.removeEventListener('focusin', this._onFocusIn);
     this.removeEventListener('focusout', this._onFocusOut);
     window.removeEventListener('resize', this._updateLayout);
@@ -554,10 +557,7 @@ export class SmoothDrawer extends HTMLElement {
     if (!target) return;
 
     this._lastTrigger = trigger;
-    if (target.name !== 'closed') {
-      this._activateOpenGuards();
-      this._setDespiaAutoScroll(false);
-    }
+    if (target.name !== 'closed') this._activateGuardsForActiveInput();
     this._emit('detent-changing', { targetDetent: target.name });
     this._track.scrollTo({
       top: target.offset,
@@ -596,16 +596,23 @@ export class SmoothDrawer extends HTMLElement {
     if (!this._viewportGuardActive) {
       this._viewportGuardActive = true;
       this._viewportGuardScrollY = window.scrollY;
-      this.addEventListener('touchstart', this._onGuardTouchStart, { capture: true, passive: false });
       window.addEventListener('scroll', this._onGuardScroll, { passive: true });
       window.visualViewport?.addEventListener('resize', this._onGuardViewportResize);
     }
 
     if (this._isDespiaRuntime() && this._despiaAutoScrollInterval === null) {
-      this._openBridge('preventdefault://autoscroll?enabled=false');
+      this._setDespiaAutoScroll(false);
       this._despiaAutoScrollInterval = setInterval(() => {
         this._openBridge('preventdefault://autoscroll?enabled=false');
       }, 500);
+    }
+  }
+
+  private _activateGuardsForActiveInput(): void {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && this.contains(active) && this._isTextInput(active)) {
+      this._focusedTextInput = active;
+      this._activateOpenGuards();
     }
   }
 
@@ -617,21 +624,25 @@ export class SmoothDrawer extends HTMLElement {
 
     if (this._viewportGuardActive) {
       this._viewportGuardActive = false;
-      this.removeEventListener('touchstart', this._onGuardTouchStart, { capture: true });
       window.removeEventListener('scroll', this._onGuardScroll);
       window.visualViewport?.removeEventListener('resize', this._onGuardViewportResize);
     }
 
+    this._focusedTextInput = null;
     this._fakeFocusInput?.remove();
     this._fakeFocusInput = null;
+    this._setDespiaAutoScroll(true);
   }
 
   private _onGuardTouchStart(event: TouchEvent): void {
     const target = event.composedPath()[0];
-    if (!(target instanceof HTMLElement) || !this._isTextInput(target)) return;
-    if (!this.hasAttribute('smart-keyboard')) return;
+    if (!this.isOpen || !(target instanceof HTMLElement) || !this._isTextInput(target) || !this.contains(target)) {
+      return;
+    }
 
     event.preventDefault();
+    this._focusedTextInput = target;
+    this._activateOpenGuards();
     this._viewportGuardScrollY = window.scrollY;
 
     const fakeInput = this._getFakeFocusInput();
@@ -765,6 +776,16 @@ export class SmoothDrawer extends HTMLElement {
       this._dragging = false;
       const settled = this._closestDetent(this._track.scrollTop);
       if (!settled) return;
+
+      if (settled.name === 'closed' && this._lastTrigger === 'drag') {
+        const fallback = this._detents.find(d => d.name === this._lastOpenedDetent && d.name !== 'closed')
+          || this._detents.find(d => d.name !== 'closed')
+          || null;
+        if (fallback) {
+          this._goToDetent(fallback.name, true, 'drag');
+          return;
+        }
+      }
 
       const changed = this._currentDetent?.name !== settled.name;
       if (changed) {
@@ -907,9 +928,14 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _onFocusIn(event: FocusEvent): void {
-    if (!this.hasAttribute('smart-keyboard')) return;
     const target = event.composedPath()[0];
     if (!(target instanceof HTMLElement) || !this._isTextInput(target)) return;
+    if (!this.contains(target)) return;
+
+    this._focusedTextInput = target;
+    if (this.isOpen) this._activateOpenGuards();
+
+    if (!this.hasAttribute('smart-keyboard')) return;
     if (this._smartKeyboard.restoreTimer) clearTimeout(this._smartKeyboard.restoreTimer);
     this._smartKeyboard.previousDetent ||= this.detent;
     this.classList.add('keyboard-active');
@@ -920,11 +946,13 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _onFocusOut(): void {
-    if (!this.hasAttribute('smart-keyboard')) return;
     if (this._smartKeyboard.restoreTimer) clearTimeout(this._smartKeyboard.restoreTimer);
     this._smartKeyboard.restoreTimer = setTimeout(() => {
-      const active = this.getRootNode() instanceof Document ? document.activeElement : null;
+      const active = document.activeElement;
       if (active instanceof HTMLElement && this.contains(active) && this._isTextInput(active)) return;
+      this._deactivateOpenGuards();
+
+      if (!this.hasAttribute('smart-keyboard')) return;
       const previous = this._smartKeyboard.previousDetent;
       this._smartKeyboard.previousDetent = null;
       this._smartKeyboard.keyboardHeight = 0;
@@ -936,12 +964,18 @@ export class SmoothDrawer extends HTMLElement {
 
   private _onVisualViewportResize(): void {
     if (!this.hasAttribute('smart-keyboard')) return;
+    if (!this.isOpen || !this._focusedTextInput) {
+      this.classList.remove('keyboard-active');
+      this._setContentPadding('');
+      return;
+    }
     this._syncKeyboardPadding();
   }
 
   private _syncKeyboardPadding(): void {
     const viewport = window.visualViewport;
     if (!viewport) return;
+    if (!this.isOpen || !this._focusedTextInput) return;
     const keyboardHeight = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
     this._smartKeyboard.keyboardHeight = keyboardHeight;
     this.classList.toggle('keyboard-active', keyboardHeight > 100);
