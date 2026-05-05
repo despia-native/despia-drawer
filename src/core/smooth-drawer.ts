@@ -78,6 +78,7 @@ type PageScrollLockSnapshot = {
 
 const DEFAULT_DETENTS = 'closed:0, peek:22vh, medium:55vh, large:92vh';
 const CLIP_SLACK = 64;
+const KEYBOARD_EXTRA_PADDING_MAX_VH = 0.09;
 
 export class SmoothDrawer extends HTMLElement {
   static observedAttributes = ['detents', 'detent', 'backdrop', 'theme', 'theme-transition', 'snap-mode'];
@@ -1019,7 +1020,7 @@ export class SmoothDrawer extends HTMLElement {
     const targetDetent = this._largestKeyboardDetent();
     if (targetDetent) this.snapTo(targetDetent.name, { trigger: 'keyboard' });
     this._syncKeyboardPadding();
-    requestAnimationFrame(() => this._scrollInputIntoDrawerView(target));
+    this._scrollFocusedInputIntoDrawerView();
   }
 
   private _onFocusOut(): void {
@@ -1049,7 +1050,12 @@ export class SmoothDrawer extends HTMLElement {
       this._setContentPadding('');
       return;
     }
+    const targetDetent = this._largestKeyboardDetent();
+    if (targetDetent && this.detent !== targetDetent.name) {
+      this.snapTo(targetDetent.name, { trigger: 'keyboard' });
+    }
     this._syncKeyboardPadding();
+    this._scrollFocusedInputIntoDrawerView();
   }
 
   private _syncKeyboardPadding(): void {
@@ -1059,7 +1065,8 @@ export class SmoothDrawer extends HTMLElement {
     const keyboardHeight = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
     this._smartKeyboard.keyboardHeight = keyboardHeight;
     this.classList.toggle('keyboard-active', keyboardHeight > 100);
-    this._setContentPadding(keyboardHeight > 0 ? `${keyboardHeight + 24}px` : '');
+    const extraPadding = Math.round(Math.min(96, window.innerHeight * KEYBOARD_EXTRA_PADDING_MAX_VH));
+    this._setContentPadding(keyboardHeight > 0 ? `${keyboardHeight + extraPadding}px` : '');
   }
 
   private _setContentPadding(value: string): void {
@@ -1084,11 +1091,16 @@ export class SmoothDrawer extends HTMLElement {
     });
   }
 
+  private _scrollFocusedInputIntoDrawerView(): void {
+    const input = this._focusedTextInput;
+    if (!input) return;
+    requestAnimationFrame(() => this._scrollInputIntoDrawerView(input));
+    setTimeout(() => this._scrollInputIntoDrawerView(input), 180);
+    setTimeout(() => this._scrollInputIntoDrawerView(input), 360);
+  }
+
   private _largestKeyboardDetent(): DrawerDetent | null {
-    const max = (window.visualViewport?.height || window.innerHeight) * 0.9;
-    return [...this._detents].reverse().find(d => d.name !== 'closed' && d.height <= max)
-      || this._detents.find(d => d.name !== 'closed')
-      || null;
+    return [...this._detents].reverse().find(d => d.name !== 'closed') || null;
   }
 
   private _isTextInput(el: HTMLElement): boolean {
