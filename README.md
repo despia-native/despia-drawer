@@ -146,6 +146,7 @@ Attributes:
 | `theme-transition` | duration | `300ms` |
 | `hide-scrollbar` | boolean attribute | absent |
 | `smart-keyboard` | boolean attribute | absent |
+| `dismissable` | `false` to block backdrop/ESC/downward dismissal | dismissable |
 
 Events:
 
@@ -199,11 +200,9 @@ Modern evergreen browsers, iOS Safari 15+, and WKWebView 15+.
 
 ## Native WebViews
 
-`@despia/drawer` helps web apps feel closer to native drawer experiences: compositor scrolling, safe-area support, haptics when available, and WebView-friendly gesture handling. When you are ready to pair that UI with real native capabilities and ship to the App Store or Google Play, [Despia Native](https://setup.despia.com) lets the same web app call device features and publish from the browser. The drawer still works as a plain custom element everywhere else.
+`@despia/drawer` helps web apps feel closer to native drawer experiences: compositor scrolling, safe-area support, PWA-friendly haptics when available, and WebView-friendly gesture handling. When you are ready to pair that UI with real native capabilities and ship to the App Store or Google Play, [Despia Native](https://setup.despia.com) lets the same web app call device features and publish from the browser. The drawer still works as a plain custom element everywhere else.
 
-Inside the Despia runtime, the drawer also coordinates with the native shell during text entry: it keeps host auto-scroll disabled while an input inside the open drawer is focused, then restores it when focus leaves or the drawer closes.
-
-That guard is scoped to normal focus events. It only starts when the drawer is open and an `input` or `textarea` inside that drawer receives focus, whether from a user tap or third-party code calling `.focus()`. It does not intercept `touchstart` or redirect focus through a hidden input, so native drawer scrolling stays in control.
+With `smart-keyboard`, the drawer opts the page into `interactive-widget=resizes-content` when possible so iOS Safari and modern WebViews resize around the keyboard instead of shifting page chrome behind the drawer. Older engines fall back to a scoped body lock while an input inside the open drawer is focused.
 
 ## Development
 

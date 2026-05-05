@@ -76,17 +76,28 @@ type PageScrollLockSnapshot = {
   body: Record<string, string>;
 };
 
+type FocusLockState = 'idle' | 'arming' | 'engaged' | 'releasing';
+type FocusLockMode = 'none' | 'resizes-content' | 'body-fixed';
+
+type InertSnapshot = {
+  element: HTMLElement;
+  inert: boolean;
+  ariaHidden: string | null;
+};
+
 const DEFAULT_DETENTS = 'closed:0, peek:22vh, medium:55vh, large:92vh';
 const CLIP_SLACK = 64;
 /** Extra scroll room beyond measured keyboard (viewport overlap can lag on focus). */
 const KEYBOARD_EXTRA_PADDING_MAX_VH = 0.15;
 /** Keep focused fields comfortably above the keyboard so nearby fields are easy to tap. */
 const KEYBOARD_SCROLL_COMFORT_MAX_VH = 0.12;
+const PROGRESS_EMIT_DELTA = 0.005;
 
 export class SmoothDrawer extends HTMLElement {
-  static observedAttributes = ['detents', 'detent', 'backdrop', 'theme', 'theme-transition', 'snap-mode'];
+  static observedAttributes = ['detents', 'detent', 'backdrop', 'theme', 'theme-transition', 'snap-mode', 'dismissable'];
   private static readonly _stackBaseZIndex = 999;
   private static _openStack: SmoothDrawer[] = [];
+  private static _titleIdCounter = 0;
 
   private _track!: HTMLDivElement;
   private _backdrop!: HTMLDivElement;
@@ -118,20 +129,27 @@ export class SmoothDrawer extends HTMLElement {
   private _cachedShadow = '';
   private _cachedSnapMode = '';
   private _cachedContentPadding = '';
-  private _despiaAutoScrollEnabled = true;
-  private _despiaAutoScrollInterval: ReturnType<typeof setInterval> | null = null;
   private _viewportGuardActive = false;
   private _viewportGuardScrollY = 0;
-  private _viewportGuardRestoreTimers: ReturnType<typeof setTimeout>[] = [];
   private _contentAutoScrollTimers: ReturnType<typeof setTimeout>[] = [];
   private _autoScrollLockTimer: ReturnType<typeof setTimeout> | null = null;
   private _isAutoScrolling = false;
   private _pageScrollLock: PageScrollLockSnapshot | null = null;
   private _pendingFocusGuardTimer: ReturnType<typeof setTimeout> | null = null;
   private _focusedTextInput: HTMLElement | null = null;
-  private _skipKeyboardRestore = false;
   private _lastLayoutWidth = 0;
   private _lastLayoutHeight = 0;
+  private _smallestViewportHeight = 0;
+  private _focusLockState: FocusLockState = 'idle';
+  private _focusLockMode: FocusLockMode = 'none';
+  private _htmlLockSnapshot: Record<string, string> | null = null;
+  private _viewportMetaTouched = false;
+  private _reducedMotion = false;
+  private _reducedMotionQuery: MediaQueryList | null = null;
+  private _cachedDetentList: DrawerDetent[] = [];
+  private _lastProgressEmit = -1;
+  private _lastProgressDetent: string | null = null;
+  private _inertSnapshots: InertSnapshot[] = [];
 
   private _smartKeyboard: SmartKeyboardState = {
     previousDetent: null,
@@ -372,8 +390,8 @@ export class SmoothDrawer extends HTMLElement {
           </div>
         </div>
       </div>
-      <label class="haptic-switch" part="haptic-switch" aria-hidden="true">
-        <input type="checkbox" switch tabindex="-1" />
+      <label class="haptic-switch" part="haptic-switch" for="smooth-drawer-haptic-switch" aria-hidden="true">
+        <input id="smooth-drawer-haptic-switch" type="checkbox" switch tabindex="-1" />
       </label>
     `;
 
@@ -397,6 +415,9 @@ export class SmoothDrawer extends HTMLElement {
     this._onGuardViewportResize = this._onGuardViewportResize.bind(this);
     this._onGuardScroll = this._onGuardScroll.bind(this);
     this._onPotentialInputFocus = this._onPotentialInputFocus.bind(this);
+    this._onKeyDown = this._onKeyDown.bind(this);
+    this._onContentScrollEnd = this._onContentScrollEnd.bind(this);
+    this._onReducedMotionChange = this._onReducedMotionChange.bind(this);
     this._clearContentAutoScroll = this._clearContentAutoScroll.bind(this);
     this._onResizeCheck = this._onResizeCheck.bind(this);
 
@@ -404,6 +425,7 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   connectedCallback(): void {
+    this._backdrop.setAttribute('aria-hidden', 'true');
     this._track.addEventListener('scroll', this._onScroll, { passive: true });
     this._closedSpacer.addEventListener('click', this._onClosedClick);
     this._closedSpacer.addEventListener('wheel', this._onBackdropScrollBlock, { passive: false });
@@ -418,12 +440,16 @@ export class SmoothDrawer extends HTMLElement {
     this.addEventListener('touchstart', this._onPotentialInputFocus, { capture: true, passive: false });
     this.addEventListener('focusin', this._onFocusIn);
     this.addEventListener('focusout', this._onFocusOut);
+    this.addEventListener('keydown', this._onKeyDown);
+    this._content.addEventListener('scrollend', this._onContentScrollEnd);
     window.addEventListener('resize', this._onResizeCheck);
     window.visualViewport?.addEventListener('resize', this._onVisualViewportResize);
+    this._setupReducedMotion();
     this._resizeObserver.observe(this);
 
     this._parseDetents();
     this._applyThemeTransition(this.getAttribute('theme-transition') || '300ms');
+    if (this.hasAttribute('smart-keyboard')) this._ensureResizableViewportMeta();
     requestAnimationFrame(() => this._updateLayout());
   }
 
@@ -442,8 +468,11 @@ export class SmoothDrawer extends HTMLElement {
     this.removeEventListener('touchstart', this._onPotentialInputFocus, { capture: true });
     this.removeEventListener('focusin', this._onFocusIn);
     this.removeEventListener('focusout', this._onFocusOut);
+    this.removeEventListener('keydown', this._onKeyDown);
+    this._content.removeEventListener('scrollend', this._onContentScrollEnd);
     window.removeEventListener('resize', this._onResizeCheck);
     window.visualViewport?.removeEventListener('resize', this._onVisualViewportResize);
+    this._teardownReducedMotion();
     this._resizeObserver.disconnect();
     if (this._scrollTimeout !== null) clearTimeout(this._scrollTimeout);
     if (this._progressFrame) cancelAnimationFrame(this._progressFrame);
@@ -451,7 +480,7 @@ export class SmoothDrawer extends HTMLElement {
     if (this._smartKeyboard.restoreTimer) clearTimeout(this._smartKeyboard.restoreTimer);
     this._clearContentAutoScroll();
     this._deactivateOpenGuards();
-    this._setDespiaAutoScroll(true);
+    this._restoreInertSiblings();
     this._markClosedInStack();
   }
 
@@ -471,6 +500,8 @@ export class SmoothDrawer extends HTMLElement {
       this._applyThemeTransition(newVal || '300ms');
     } else if (name === 'snap-mode') {
       this._applySnapMode();
+    } else if (name === 'dismissable') {
+      this._updateA11y();
     }
   }
 
@@ -550,7 +581,7 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   get detentList(): DrawerDetent[] {
-    return this._detents.map(d => ({ name: d.name, height: d.height, offset: d.offset }));
+    return this._cachedDetentList;
   }
 
   get isOpen(): boolean {
@@ -567,6 +598,26 @@ export class SmoothDrawer extends HTMLElement {
 
   private _applyThemeTransition(value: string): void {
     this.style.setProperty('--drawer-duration', value);
+  }
+
+  private _setupReducedMotion(): void {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    this._reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    this._reducedMotion = this._reducedMotionQuery.matches;
+    this._reducedMotionQuery.addEventListener?.('change', this._onReducedMotionChange);
+  }
+
+  private _teardownReducedMotion(): void {
+    this._reducedMotionQuery?.removeEventListener?.('change', this._onReducedMotionChange);
+    this._reducedMotionQuery = null;
+  }
+
+  private _onReducedMotionChange(event: MediaQueryListEvent): void {
+    this._reducedMotion = event.matches;
+  }
+
+  private _scrollBehavior(animate: boolean): ScrollBehavior {
+    return animate && !this._reducedMotion ? 'smooth' : 'auto';
   }
 
   private _parseDetents(): void {
@@ -588,12 +639,17 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _resolveHeight(value: string): number {
-    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const dynamicHeight = window.visualViewport?.height || window.innerHeight;
+    const stableHeight = window.innerHeight;
+    this._smallestViewportHeight = this._smallestViewportHeight
+      ? Math.min(this._smallestViewportHeight, dynamicHeight)
+      : dynamicHeight;
     const v = value.trim();
-    if (v.endsWith('dvh')) return (parseFloat(v) / 100) * viewportHeight;
-    if (v.endsWith('vh')) return (parseFloat(v) / 100) * viewportHeight;
+    if (v.endsWith('dvh')) return (parseFloat(v) / 100) * dynamicHeight;
+    if (v.endsWith('svh')) return (parseFloat(v) / 100) * this._smallestViewportHeight;
+    if (v.endsWith('vh')) return (parseFloat(v) / 100) * stableHeight;
     if (v.endsWith('px')) return parseFloat(v);
-    if (v.endsWith('%')) return (parseFloat(v) / 100) * viewportHeight;
+    if (v.endsWith('%')) return (parseFloat(v) / 100) * dynamicHeight;
     const n = parseFloat(v);
     return Number.isFinite(n) ? n : 0;
   }
@@ -603,7 +659,8 @@ export class SmoothDrawer extends HTMLElement {
     const height = window.innerHeight;
     const widthChanged = width !== this._lastLayoutWidth;
     const heightDelta = Math.abs(height - this._lastLayoutHeight);
-    if (this._lastLayoutWidth && !widthChanged && heightDelta < 150) return;
+    const keyboardResize = Boolean(window.visualViewport && window.visualViewport.height < window.innerHeight - 24);
+    if (this._lastLayoutWidth && !widthChanged && (heightDelta < 24 || keyboardResize)) return;
     this._updateLayout();
   }
 
@@ -619,6 +676,7 @@ export class SmoothDrawer extends HTMLElement {
         return { name: d.name, height, offset: height };
       })
       .sort((a, b) => a.height - b.height);
+    this._cachedDetentList = this._detents.map(d => ({ name: d.name, height: d.height, offset: d.offset }));
 
     const largest = this._largestHeight();
     this.style.setProperty('--track-height', `${largest}px`);
@@ -644,6 +702,7 @@ export class SmoothDrawer extends HTMLElement {
     this._updateClipPath();
     this._updateBackdropOpacity();
     this._updateBackdrop();
+    this._updateA11y();
   }
 
   private _goToDetent(name: string, animate: boolean, trigger: DrawerTrigger = 'programmatic'): void {
@@ -656,18 +715,11 @@ export class SmoothDrawer extends HTMLElement {
     this._emit('detent-changing', { targetDetent: target.name });
     this._track.scrollTo({
       top: target.offset,
-      behavior: animate ? 'smooth' : 'auto'
+      behavior: this._scrollBehavior(animate)
     });
     this._updateClipPath();
     this._updateBackdropOpacity();
     this._updateBackdrop();
-  }
-
-  private _setDespiaAutoScroll(enabled: boolean): void {
-    if (!this._isDespiaRuntime()) return;
-    if (this._despiaAutoScrollEnabled === enabled) return;
-    this._despiaAutoScrollEnabled = enabled;
-    this._openBridge(`preventdefault://autoscroll?enabled=${enabled ? 'true' : 'false'}`);
   }
 
   private _haptic(mode: 'light' | 'heavy'): void {
@@ -681,7 +733,8 @@ export class SmoothDrawer extends HTMLElement {
     try {
       label.click();
     } catch {
-      // iOS 17.4+ Safari/PWA toggles the hidden switch which fires a subtle haptic.
+      // iOS 18+ Safari/PWA toggles the hidden switch from its associated label,
+      // which fires a subtle haptic. Direct input.click() does not reliably do it.
       // Older iOS and other engines silently ignore this and fall back to vibration.
     }
   }
@@ -695,38 +748,10 @@ export class SmoothDrawer extends HTMLElement {
     }
   }
 
-  private _isDespiaRuntime(): boolean {
-    return navigator.userAgent.toLowerCase().includes('despia');
-  }
-
-  private _openBridge(url: string): void {
-    try {
-      (window as Window & { despia?: string }).despia = url;
-    } catch {
-      // Custom-scheme bridge calls are best-effort outside Despia WKWebView.
-    }
-  }
-
   private _activateOpenGuards(): void {
     if (!this.isOpen || !this._focusedTextInput) return;
-
-    if (!this._viewportGuardActive) {
-      this._viewportGuardActive = true;
-      this._viewportGuardScrollY = window.scrollY;
-      this._lockPageScrollForFocusedInput();
-      window.addEventListener('scroll', this._onGuardScroll, { passive: true, capture: true });
-      document.addEventListener('scroll', this._onGuardScroll, { passive: true, capture: true });
-      window.visualViewport?.addEventListener('resize', this._onGuardViewportResize);
-      window.visualViewport?.addEventListener('scroll', this._onGuardScroll, { passive: true });
-    }
-    this._queueViewportScrollRestores();
-
-    if (this._isDespiaRuntime() && this._despiaAutoScrollInterval === null) {
-      this._setDespiaAutoScroll(false);
-      this._despiaAutoScrollInterval = setInterval(() => {
-        this._openBridge('preventdefault://autoscroll?enabled=false');
-      }, 500);
-    }
+    if (this.hasAttribute('smart-keyboard')) this._ensureResizableViewportMeta();
+    this._setFocusLockState('engaged');
   }
 
   private _activateGuardsForActiveInput(): void {
@@ -744,31 +769,14 @@ export class SmoothDrawer extends HTMLElement {
       clearTimeout(this._pendingFocusGuardTimer);
       this._pendingFocusGuardTimer = null;
     }
-    this._clearViewportScrollRestores();
-
-    if (this._despiaAutoScrollInterval !== null) {
-      clearInterval(this._despiaAutoScrollInterval);
-      this._despiaAutoScrollInterval = null;
-    }
-
-    if (this._viewportGuardActive) {
-      this._viewportGuardActive = false;
-      window.removeEventListener('scroll', this._onGuardScroll, { capture: true } as EventListenerOptions);
-      document.removeEventListener('scroll', this._onGuardScroll, { capture: true } as EventListenerOptions);
-      window.visualViewport?.removeEventListener('resize', this._onGuardViewportResize);
-      window.visualViewport?.removeEventListener('scroll', this._onGuardScroll);
-    }
-
-    this._unlockPageScrollForFocusedInput();
+    this._setFocusLockState('idle');
     this._focusedTextInput = null;
-    this._setDespiaAutoScroll(true);
   }
 
   private _onGuardViewportResize(): void {
     if (!this._viewportGuardActive || !window.visualViewport) return;
-    if (this._focusedTextInput && window.visualViewport.height < window.innerHeight) {
+    if (this._focusedTextInput && this._focusLockMode === 'body-fixed' && window.visualViewport.height < window.innerHeight) {
       this._restoreViewportScroll();
-      this._queueViewportScrollRestores();
     }
   }
 
@@ -779,6 +787,127 @@ export class SmoothDrawer extends HTMLElement {
     if (this._focusedTextInput && this.isOpen) {
       this._restoreViewportScroll();
       this._reapplyPageScrollLock();
+    }
+  }
+
+  private _setFocusLockState(next: FocusLockState): void {
+    if (next === this._focusLockState) return;
+    const previous = this._focusLockState;
+    this._focusLockState = next;
+
+    if (next === 'engaged') {
+      this._engageFocusLock(previous);
+      return;
+    }
+
+    if (next === 'idle') {
+      this._releaseFocusLock();
+    }
+  }
+
+  private _engageFocusLock(previous: FocusLockState): void {
+    if (!this._focusedTextInput || !this.isOpen) return;
+    if (previous === 'engaged' && this._viewportGuardActive) return;
+
+    this._viewportGuardScrollY = window.scrollY;
+    this._focusLockMode = this._shouldUseResizableViewportLock() ? 'resizes-content' : 'body-fixed';
+    this._viewportGuardActive = true;
+
+    if (this._focusLockMode === 'resizes-content') {
+      this._lockHtmlScrollOnly();
+      window.visualViewport?.addEventListener('resize', this._onGuardViewportResize);
+      return;
+    }
+
+    this._lockPageScrollForFocusedInput();
+    window.addEventListener('scroll', this._onGuardScroll, { passive: true, capture: true });
+    document.addEventListener('scroll', this._onGuardScroll, { passive: true, capture: true });
+    window.visualViewport?.addEventListener('resize', this._onGuardViewportResize);
+    window.visualViewport?.addEventListener('scroll', this._onGuardScroll, { passive: true });
+  }
+
+  private _releaseFocusLock(): void {
+    if (!this._viewportGuardActive && !this._pageScrollLock && !this._htmlLockSnapshot) return;
+    this._focusLockState = 'releasing';
+
+    if (this._focusLockMode === 'body-fixed') {
+      window.removeEventListener('scroll', this._onGuardScroll, { capture: true } as EventListenerOptions);
+      document.removeEventListener('scroll', this._onGuardScroll, { capture: true } as EventListenerOptions);
+      window.visualViewport?.removeEventListener('scroll', this._onGuardScroll);
+    }
+    window.visualViewport?.removeEventListener('resize', this._onGuardViewportResize);
+
+    this._viewportGuardActive = false;
+    this._unlockHtmlScrollOnly();
+    this._unlockPageScrollForFocusedInput();
+    this._focusLockMode = 'none';
+    this._focusLockState = 'idle';
+  }
+
+  private _ensureResizableViewportMeta(): void {
+    if (this._viewportMetaTouched || typeof document === 'undefined') return;
+    this._viewportMetaTouched = true;
+
+    let meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+      document.head?.appendChild(meta);
+    }
+
+    const content = meta.content || '';
+    if (!/interactive-widget\s*=/.test(content)) {
+      meta.content = `${content}${content.trim() ? ', ' : ''}interactive-widget=resizes-content`;
+    }
+  }
+
+  private _shouldUseResizableViewportLock(): boolean {
+    if (!this.hasAttribute('smart-keyboard')) return false;
+    const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+    const hasResizableMeta = Boolean(meta?.content.includes('interactive-widget=resizes-content'));
+    const hasVirtualKeyboard = 'virtualKeyboard' in navigator;
+    const cssSupports = typeof CSS !== 'undefined'
+      && typeof CSS.supports === 'function'
+      && CSS.supports('(interactive-widget: resizes-content)');
+    const iosVersion = this._iosVersion();
+    if (iosVersion) {
+      const [major, minor] = iosVersion;
+      return hasResizableMeta && (major > 16 || (major === 16 && minor >= 4));
+    }
+    return hasResizableMeta || hasVirtualKeyboard || cssSupports;
+  }
+
+  private _iosVersion(): [number, number] | null {
+    const ua = navigator.userAgent;
+    if (!/\b(iPad|iPhone|iPod)\b/.test(ua) && !(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+      return null;
+    }
+    const match = /OS (\d+)[._](\d+)/.exec(ua);
+    if (!match) return null;
+    return [Number(match[1]), Number(match[2])];
+  }
+
+  private _lockHtmlScrollOnly(): void {
+    if (this._htmlLockSnapshot) return;
+    const html = document.documentElement;
+    const properties = ['overflow', 'overscroll-behavior'];
+    this._htmlLockSnapshot = {};
+    for (const property of properties) {
+      this._htmlLockSnapshot[property] = html.style.getPropertyValue(property);
+    }
+    html.style.setProperty('overflow', 'hidden');
+    html.style.setProperty('overscroll-behavior', 'none');
+  }
+
+  private _unlockHtmlScrollOnly(): void {
+    const snapshot = this._htmlLockSnapshot;
+    if (!snapshot) return;
+    this._htmlLockSnapshot = null;
+    const html = document.documentElement;
+    for (const [property, value] of Object.entries(snapshot)) {
+      if (value) html.style.setProperty(property, value);
+      else html.style.removeProperty(property);
     }
   }
 
@@ -794,20 +923,8 @@ export class SmoothDrawer extends HTMLElement {
     }
   }
 
-  private _queueViewportScrollRestores(): void {
-    this._clearViewportScrollRestores();
-    for (const delay of [0, 50, 120, 250, 500]) {
-      this._viewportGuardRestoreTimers.push(setTimeout(() => this._restoreViewportScroll(), delay));
-    }
-  }
-
-  private _clearViewportScrollRestores(): void {
-    for (const timer of this._viewportGuardRestoreTimers) clearTimeout(timer);
-    this._viewportGuardRestoreTimers = [];
-  }
-
   private _restoreViewportScroll(): void {
-    if (!this._viewportGuardActive || !this._focusedTextInput || !this.isOpen) return;
+    if (!this._viewportGuardActive || this._focusLockMode !== 'body-fixed' || !this._focusedTextInput || !this.isOpen) return;
     if (Math.abs(window.scrollY - this._viewportGuardScrollY) > 1) {
       window.scrollTo(0, this._viewportGuardScrollY);
     }
@@ -886,6 +1003,20 @@ export class SmoothDrawer extends HTMLElement {
     }));
   }
 
+  private _emitProgressIfNeeded(): void {
+    const state = this.getState();
+    const progressChanged = Math.abs(state.progress - this._lastProgressEmit) >= PROGRESS_EMIT_DELTA;
+    const detentChanged = state.detent !== this._lastProgressDetent;
+    if (!progressChanged && !detentChanged) return;
+    this._lastProgressEmit = state.progress;
+    this._lastProgressDetent = state.detent;
+    this.dispatchEvent(new CustomEvent('drawer-progress', {
+      bubbles: true,
+      composed: true,
+      detail: state
+    }));
+  }
+
   private _updateClipPath(): void {
     const trackRect = this._track.getBoundingClientRect();
     const drawerRect = this._drawer.getBoundingClientRect();
@@ -950,12 +1081,14 @@ export class SmoothDrawer extends HTMLElement {
       if (atLargest !== this._cachedFullyOpen) {
         this.classList.toggle('fully-open', atLargest);
         this._cachedFullyOpen = atLargest;
+        this._updateA11y();
       }
     });
   }
 
   private _onScroll(): void {
     this._dragging = true;
+    if (this._clampDismissalScroll()) return;
     this._dismissKeyboardForDownwardDrawerScroll(this._track.scrollTop);
     this._updateClipPath();
     this._updateBackdropOpacity();
@@ -964,7 +1097,7 @@ export class SmoothDrawer extends HTMLElement {
     if (!this._progressFrame) {
       this._progressFrame = requestAnimationFrame(() => {
         this._progressFrame = 0;
-        this._emit('drawer-progress');
+        this._emitProgressIfNeeded();
       });
     }
 
@@ -990,10 +1123,8 @@ export class SmoothDrawer extends HTMLElement {
           this._lastOpenedDetent = settled.name;
         }
 
-        if (settled.name === 'closed' && !this._focusedTextInput) {
-          this._setDespiaAutoScroll(true);
-        }
         this._haptic(settled.height === this._largestHeight() && settled.name !== 'closed' ? 'heavy' : 'light');
+        this._updateA11y();
         this._emit('detent-change');
       }
 
@@ -1014,19 +1145,129 @@ export class SmoothDrawer extends HTMLElement {
 
   private _onClosedClick(): void {
     if (!this._isTopMostInStack()) return;
-    if (this._cachedBackdropInteractive) {
+    if (this._cachedBackdropInteractive && this._isDismissable()) {
       this.snapTo('closed', { trigger: 'user' });
     }
   }
 
   private _onBackdropClick(): void {
     if (!this._isTopMostInStack()) return;
+    if (!this._isDismissable()) return;
     this.snapTo('closed', { trigger: 'user' });
   }
 
   private _onBackdropScrollBlock(event: Event): void {
     if (!this.classList.contains('backdrop-active')) return;
     event.preventDefault();
+  }
+
+  private _isDismissable(): boolean {
+    return this.getAttribute('dismissable') !== 'false';
+  }
+
+  private _clampDismissalScroll(): boolean {
+    if (this._isDismissable() || !this.isOpen) return false;
+    const lowestOpen = this._detents.find(d => d.name !== 'closed');
+    if (!lowestOpen || this._track.scrollTop >= lowestOpen.offset - 4) return false;
+    this._track.scrollTo({ top: lowestOpen.offset, behavior: 'auto' });
+    return true;
+  }
+
+  private _onKeyDown(event: KeyboardEvent): void {
+    if (!this.isOpen || !this._isTopMostInStack()) return;
+    if (event.key === 'Escape') {
+      if (!this._isDismissable()) return;
+      event.preventDefault();
+      this.snapTo('closed', { trigger: 'user' });
+      return;
+    }
+    if (event.key === 'Tab' && this._cachedFullyOpen) {
+      this._trapFocus(event);
+    }
+  }
+
+  private _trapFocus(event: KeyboardEvent): void {
+    const focusable = this._focusableElements();
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (!first || !last) return;
+
+    const active = document.activeElement;
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus({ preventScroll: true });
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus({ preventScroll: true });
+    }
+  }
+
+  private _focusableElements(): HTMLElement[] {
+    const selector = [
+      'a[href]',
+      'button:not([disabled])',
+      'input:not([disabled]):not([type="hidden"])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(',');
+    return [...this.querySelectorAll<HTMLElement>(selector)]
+      .filter(el => {
+        if (el.hasAttribute('hidden')) return false;
+        const style = getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      });
+  }
+
+  private _updateA11y(): void {
+    const open = this.isOpen && this._isTopMostInStack();
+    if (open) {
+      this.setAttribute('role', 'dialog');
+      this.setAttribute('aria-modal', 'true');
+      this._syncLabelledBy();
+    } else {
+      this.removeAttribute('role');
+      this.removeAttribute('aria-modal');
+      this.removeAttribute('aria-labelledby');
+    }
+
+    const shouldInert = open && this._cachedFullyOpen === true;
+    if (shouldInert) this._applyInertSiblings();
+    else this._restoreInertSiblings();
+  }
+
+  private _syncLabelledBy(): void {
+    const title = this.querySelector<HTMLElement>('[slot="title"], [data-drawer-title]');
+    if (!title) return;
+    if (!title.id) {
+      SmoothDrawer._titleIdCounter += 1;
+      title.id = `smooth-drawer-title-${SmoothDrawer._titleIdCounter}`;
+    }
+    this.setAttribute('aria-labelledby', title.id);
+  }
+
+  private _applyInertSiblings(): void {
+    if (this._inertSnapshots.length || !this.parentElement) return;
+    for (const sibling of [...this.parentElement.children]) {
+      if (!(sibling instanceof HTMLElement) || sibling === this) continue;
+      this._inertSnapshots.push({
+        element: sibling,
+        inert: Boolean((sibling as HTMLElement & { inert?: boolean }).inert),
+        ariaHidden: sibling.getAttribute('aria-hidden')
+      });
+      (sibling as HTMLElement & { inert: boolean }).inert = true;
+      sibling.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  private _restoreInertSiblings(): void {
+    for (const snapshot of this._inertSnapshots) {
+      (snapshot.element as HTMLElement & { inert: boolean }).inert = snapshot.inert;
+      if (snapshot.ariaHidden === null) snapshot.element.removeAttribute('aria-hidden');
+      else snapshot.element.setAttribute('aria-hidden', snapshot.ariaHidden);
+    }
+    this._inertSnapshots = [];
   }
 
   private _updateSquircle(): void {
@@ -1133,7 +1374,6 @@ export class SmoothDrawer extends HTMLElement {
     if (scrollTop >= previousScrollTop - 8) return;
     if (document.activeElement !== this._focusedTextInput) return;
 
-    this._skipKeyboardRestore = true;
     this._focusedTextInput.blur();
   }
 
@@ -1167,7 +1407,6 @@ export class SmoothDrawer extends HTMLElement {
     if (event.cancelable) event.preventDefault();
     input.focus({ preventScroll: true });
     if (Math.abs(window.scrollY - scrollY) > 1) window.scrollTo(0, scrollY);
-    this._queueViewportScrollRestores();
   }
 
   private _onFocusIn(event: FocusEvent): void {
@@ -1208,7 +1447,6 @@ export class SmoothDrawer extends HTMLElement {
       this._deactivateOpenGuards();
 
       if (!this.hasAttribute('smart-keyboard')) return;
-      this._skipKeyboardRestore = false;
       this._smartKeyboard.previousDetent = null;
       this._smartKeyboard.keyboardHeight = 0;
       this.classList.remove('keyboard-active');
@@ -1260,6 +1498,15 @@ export class SmoothDrawer extends HTMLElement {
     this._isAutoScrolling = false;
   }
 
+  private _onContentScrollEnd(): void {
+    if (!this._isAutoScrolling) return;
+    if (this._autoScrollLockTimer !== null) {
+      clearTimeout(this._autoScrollLockTimer);
+      this._autoScrollLockTimer = null;
+    }
+    this._isAutoScrolling = false;
+  }
+
   private _scrollInputIntoDrawerView(input: HTMLElement): void {
     if (!input.isConnected) return;
     if (this._isAutoScrolling) return;
@@ -1291,13 +1538,17 @@ export class SmoothDrawer extends HTMLElement {
     this._isAutoScrolling = true;
     this._content.scrollTo({
       top: targetScrollTop,
-      behavior: 'smooth'
+      behavior: this._scrollBehavior(true)
     });
     if (this._autoScrollLockTimer !== null) clearTimeout(this._autoScrollLockTimer);
-    this._autoScrollLockTimer = setTimeout(() => {
-      this._isAutoScrolling = false;
-      this._autoScrollLockTimer = null;
-    }, 380);
+    if ('onscrollend' in this._content) {
+      this._autoScrollLockTimer = setTimeout(() => this._onContentScrollEnd(), 600);
+    } else {
+      this._autoScrollLockTimer = setTimeout(() => {
+        this._isAutoScrolling = false;
+        this._autoScrollLockTimer = null;
+      }, 600);
+    }
   }
 
   private _scrollFocusedInputIntoDrawerView(): void {
@@ -1330,6 +1581,7 @@ export class SmoothDrawer extends HTMLElement {
     this.classList.remove('stacked-behind');
     this.style.removeProperty('--drawer-z-index');
     SmoothDrawer._syncStackLayers();
+    this._updateA11y();
   }
 
   private _applyStackLayer(layerIndex: number, isTopMost: boolean): void {
@@ -1338,6 +1590,7 @@ export class SmoothDrawer extends HTMLElement {
     this.classList.toggle('stacked-behind', !isTopMost);
     this._updateBackdropOpacity();
     this._updateBackdrop();
+    this._updateA11y();
   }
 
   private static _syncStackLayers(): void {

@@ -29,6 +29,7 @@ void SmoothDrawerElement;
       [attr.snap-mode]="snapMode"
       [attr.hide-scrollbar]="hideScrollbar ? '' : null"
       [attr.smart-keyboard]="smartKeyboard ? '' : null"
+      [attr.dismissable]="dismissable === false ? 'false' : null"
     >
       <ng-content></ng-content>
     </smooth-drawer>
@@ -45,6 +46,7 @@ export class SmoothDrawerComponent implements AfterViewInit, OnDestroy {
   @Input() snapMode?: 'momentum' | 'strict';
   @Input() hideScrollbar = false;
   @Input() smartKeyboard = false;
+  @Input() dismissable = true;
 
   @Output() detentChange = new EventEmitter<any>();
   @Output() detentChanging = new EventEmitter<any>();

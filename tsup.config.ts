@@ -13,7 +13,7 @@ export default defineConfig([
     format: ['esm', 'cjs'],
     dts: true,
     clean: true,
-    sourcemap: true,
+    sourcemap: false,
     treeshake: true,
     splitting: false,
     external: [
@@ -32,7 +32,7 @@ export default defineConfig([
     },
     format: ['iife'],
     globalName: 'DespiaDrawer',
-    sourcemap: true,
+    sourcemap: false,
     splitting: false,
     minify: false,
     clean: false,

@@ -31,6 +31,7 @@ export type SmoothDrawerProps = {
   snapMode?: SnapMode;
   hideScrollbar?: boolean;
   smartKeyboard?: boolean;
+  dismissable?: boolean;
   onDetentChange?: (state: DrawerState) => void;
   onDetentChanging?: (state: DrawerState) => void;
   onProgress?: (state: DrawerState) => void;
@@ -84,6 +85,7 @@ export const SmoothDrawer = forwardRef<DrawerHandle, SmoothDrawerProps>(
         snap-mode={props.snapMode}
         hide-scrollbar={props.hideScrollbar ? '' : undefined}
         smart-keyboard={props.smartKeyboard ? '' : undefined}
+        dismissable={props.dismissable === false ? 'false' : undefined}
         className={props.className}
         style={props.style}
       >
@@ -106,6 +108,7 @@ declare global {
           'snap-mode'?: SnapMode;
           'hide-scrollbar'?: string;
           'smart-keyboard'?: string;
+          dismissable?: string;
         },
         HTMLElement
       >;

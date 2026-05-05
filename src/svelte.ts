@@ -11,6 +11,7 @@ export type SmoothDrawerSvelteProps = {
   snapMode?: 'momentum' | 'strict';
   hideScrollbar?: boolean;
   smartKeyboard?: boolean;
+  dismissable?: boolean;
 };
 
 export default undefined as unknown;

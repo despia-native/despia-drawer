@@ -14,7 +14,8 @@ export const SmoothDrawer = defineComponent({
     themeTransition: { type: String, default: undefined },
     snapMode: { type: String as PropType<SnapMode>, default: undefined },
     hideScrollbar: { type: Boolean, default: false },
-    smartKeyboard: { type: Boolean, default: false }
+    smartKeyboard: { type: Boolean, default: false },
+    dismissable: { type: Boolean, default: true }
   },
   emits: {
     'detent-change': (_state: DrawerState) => true,
@@ -60,7 +61,8 @@ export const SmoothDrawer = defineComponent({
       'theme-transition': props.themeTransition,
       'snap-mode': props.snapMode,
       'hide-scrollbar': props.hideScrollbar ? '' : undefined,
-      'smart-keyboard': props.smartKeyboard ? '' : undefined
+      'smart-keyboard': props.smartKeyboard ? '' : undefined,
+      dismissable: props.dismissable === false ? 'false' : undefined
     }, slots.default?.());
   }
 });

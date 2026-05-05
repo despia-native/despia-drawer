@@ -10,6 +10,7 @@
   export let snapMode: 'momentum' | 'strict' | undefined = undefined;
   export let hideScrollbar: boolean = false;
   export let smartKeyboard: boolean = false;
+  export let dismissable: boolean = true;
 
   let el: any;
   const dispatch = createEventDispatcher();
@@ -50,6 +51,7 @@
   snap-mode={snapMode}
   hide-scrollbar={hideScrollbar ? '' : undefined}
   smart-keyboard={smartKeyboard ? '' : undefined}
+  dismissable={dismissable === false ? 'false' : undefined}
 >
   <slot />
 </smooth-drawer>
