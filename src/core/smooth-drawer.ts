@@ -370,8 +370,8 @@ export class SmoothDrawer extends HTMLElement {
     this._content.addEventListener('wheel', this._clearContentAutoScroll, { passive: true });
     this._content.addEventListener('touchstart', this._clearContentAutoScroll, { passive: true });
     this._content.addEventListener('pointerdown', this._clearContentAutoScroll, { passive: true });
-    this.addEventListener('pointerdown', this._onPotentialInputFocus, { capture: true, passive: true });
-    this.addEventListener('touchstart', this._onPotentialInputFocus, { capture: true, passive: true });
+    this.addEventListener('pointerdown', this._onPotentialInputFocus, { capture: true, passive: false });
+    this.addEventListener('touchstart', this._onPotentialInputFocus, { capture: true, passive: false });
     this.addEventListener('focusin', this._onFocusIn);
     this.addEventListener('focusout', this._onFocusOut);
     window.addEventListener('resize', this._updateLayout);
@@ -1031,6 +1031,7 @@ export class SmoothDrawer extends HTMLElement {
     if (!this.isOpen || !this.contains(target)) return;
     this._focusedTextInput = target;
     this._activateOpenGuards();
+    this._focusInputWithoutViewportJump(target, event);
     this._pendingFocusGuardTimer = setTimeout(() => {
       this._pendingFocusGuardTimer = null;
       const active = document.activeElement;
@@ -1041,6 +1042,18 @@ export class SmoothDrawer extends HTMLElement {
       }
       this._deactivateOpenGuards();
     }, 800);
+  }
+
+  private _focusInputWithoutViewportJump(input: HTMLElement, event: Event): void {
+    if (!this.hasAttribute('smart-keyboard')) return;
+    if (document.activeElement === input) return;
+    if (typeof PointerEvent !== 'undefined' && event instanceof PointerEvent && event.pointerType === 'mouse') return;
+
+    const scrollY = this._viewportGuardScrollY;
+    if (event.cancelable) event.preventDefault();
+    input.focus({ preventScroll: true });
+    if (Math.abs(window.scrollY - scrollY) > 1) window.scrollTo(0, scrollY);
+    this._queueViewportScrollRestores();
   }
 
   private _onFocusIn(event: FocusEvent): void {
