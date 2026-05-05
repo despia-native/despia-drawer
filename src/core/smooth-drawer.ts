@@ -70,6 +70,12 @@ type SmartKeyboardState = {
   restoreTimer: ReturnType<typeof setTimeout> | null;
 };
 
+type PageScrollLockSnapshot = {
+  scrollY: number;
+  html: Record<string, string>;
+  body: Record<string, string>;
+};
+
 const DEFAULT_DETENTS = 'closed:0, peek:22vh, medium:55vh, large:92vh';
 const CLIP_SLACK = 64;
 
@@ -108,6 +114,12 @@ export class SmoothDrawer extends HTMLElement {
   private _despiaAutoScrollInterval: ReturnType<typeof setInterval> | null = null;
   private _viewportGuardActive = false;
   private _viewportGuardScrollY = 0;
+  private _viewportGuardRestoreTimers: ReturnType<typeof setTimeout>[] = [];
+  private _pageScrollLock: PageScrollLockSnapshot | null = null;
+  private _focusOpacityGuards = new Map<HTMLElement, {
+    opacity: string;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
   private _focusedTextInput: HTMLElement | null = null;
 
   private _smartKeyboard: SmartKeyboardState = {
@@ -332,6 +344,8 @@ export class SmoothDrawer extends HTMLElement {
     this._onVisualViewportResize = this._onVisualViewportResize.bind(this);
     this._onGuardViewportResize = this._onGuardViewportResize.bind(this);
     this._onGuardScroll = this._onGuardScroll.bind(this);
+    this._onPotentialInputFocus = this._onPotentialInputFocus.bind(this);
+    this._syncPageScrollLockHeight = this._syncPageScrollLockHeight.bind(this);
 
     this._resizeObserver = new ResizeObserver(this._updateLayout);
   }
@@ -340,6 +354,8 @@ export class SmoothDrawer extends HTMLElement {
     this._track.addEventListener('scroll', this._onScroll, { passive: true });
     this._closedSpacer.addEventListener('click', this._onClosedClick);
     this._backdrop.addEventListener('click', this._onBackdropClick);
+    this.addEventListener('pointerdown', this._onPotentialInputFocus, { capture: true, passive: true });
+    this.addEventListener('touchstart', this._onPotentialInputFocus, { capture: true, passive: true });
     this.addEventListener('focusin', this._onFocusIn);
     this.addEventListener('focusout', this._onFocusOut);
     window.addEventListener('resize', this._updateLayout);
@@ -355,6 +371,8 @@ export class SmoothDrawer extends HTMLElement {
     this._track.removeEventListener('scroll', this._onScroll);
     this._closedSpacer.removeEventListener('click', this._onClosedClick);
     this._backdrop.removeEventListener('click', this._onBackdropClick);
+    this.removeEventListener('pointerdown', this._onPotentialInputFocus, { capture: true });
+    this.removeEventListener('touchstart', this._onPotentialInputFocus, { capture: true });
     this.removeEventListener('focusin', this._onFocusIn);
     this.removeEventListener('focusout', this._onFocusOut);
     window.removeEventListener('resize', this._updateLayout);
@@ -364,6 +382,7 @@ export class SmoothDrawer extends HTMLElement {
     if (this._progressFrame) cancelAnimationFrame(this._progressFrame);
     if (this._backdropFrame) cancelAnimationFrame(this._backdropFrame);
     if (this._smartKeyboard.restoreTimer) clearTimeout(this._smartKeyboard.restoreTimer);
+    this._restoreAllFocusOpacityGuards();
     this._deactivateOpenGuards();
     this._setDespiaAutoScroll(true);
   }
@@ -593,9 +612,11 @@ export class SmoothDrawer extends HTMLElement {
     if (!this._viewportGuardActive) {
       this._viewportGuardActive = true;
       this._viewportGuardScrollY = window.scrollY;
+      this._lockPageScrollForFocusedInput();
       window.addEventListener('scroll', this._onGuardScroll, { passive: true });
       window.visualViewport?.addEventListener('resize', this._onGuardViewportResize);
     }
+    this._queueViewportScrollRestores();
 
     if (this._isDespiaRuntime() && this._despiaAutoScrollInterval === null) {
       this._setDespiaAutoScroll(false);
@@ -616,6 +637,8 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _deactivateOpenGuards(): void {
+    this._clearViewportScrollRestores();
+
     if (this._despiaAutoScrollInterval !== null) {
       clearInterval(this._despiaAutoScrollInterval);
       this._despiaAutoScrollInterval = null;
@@ -627,22 +650,98 @@ export class SmoothDrawer extends HTMLElement {
       window.visualViewport?.removeEventListener('resize', this._onGuardViewportResize);
     }
 
+    this._unlockPageScrollForFocusedInput();
     this._focusedTextInput = null;
     this._setDespiaAutoScroll(true);
   }
 
   private _onGuardViewportResize(): void {
     if (!this._viewportGuardActive || !window.visualViewport) return;
-    if (window.visualViewport.height < window.innerHeight) {
-      window.scrollTo(0, this._viewportGuardScrollY);
+    if (this._focusedTextInput && window.visualViewport.height < window.innerHeight) {
+      this._syncPageScrollLockHeight();
+      this._restoreViewportScroll();
+      this._queueViewportScrollRestores();
     }
   }
 
   private _onGuardScroll(): void {
     if (!this._viewportGuardActive) return;
-    if (!window.visualViewport || window.visualViewport.height >= window.innerHeight) {
-      this._viewportGuardScrollY = window.scrollY;
+    if (this._focusedTextInput && this.isOpen) {
+      this._restoreViewportScroll();
     }
+  }
+
+  private _queueViewportScrollRestores(): void {
+    this._clearViewportScrollRestores();
+    for (const delay of [0, 50, 120, 250, 500]) {
+      this._viewportGuardRestoreTimers.push(setTimeout(() => this._restoreViewportScroll(), delay));
+    }
+  }
+
+  private _clearViewportScrollRestores(): void {
+    for (const timer of this._viewportGuardRestoreTimers) clearTimeout(timer);
+    this._viewportGuardRestoreTimers = [];
+  }
+
+  private _restoreViewportScroll(): void {
+    if (!this._viewportGuardActive || !this._focusedTextInput || !this.isOpen) return;
+    if (Math.abs(window.scrollY - this._viewportGuardScrollY) > 1) {
+      window.scrollTo(0, this._viewportGuardScrollY);
+    }
+  }
+
+  private _lockPageScrollForFocusedInput(): void {
+    if (this._pageScrollLock) return;
+
+    const html = document.documentElement;
+    const body = document.body;
+    const properties = ['height', 'overflow', 'touch-action', 'overscroll-behavior', '-webkit-overflow-scrolling'];
+    const snapshot: PageScrollLockSnapshot = {
+      scrollY: this._viewportGuardScrollY,
+      html: {},
+      body: {}
+    };
+
+    for (const property of properties) {
+      snapshot.html[property] = html.style.getPropertyValue(property);
+      snapshot.body[property] = body.style.getPropertyValue(property);
+    }
+
+    this._pageScrollLock = snapshot;
+    window.addEventListener('resize', this._syncPageScrollLockHeight);
+    this._syncPageScrollLockHeight();
+    for (const element of [html, body]) {
+      element.style.setProperty('overflow', 'hidden');
+      element.style.setProperty('touch-action', 'none');
+      element.style.setProperty('overscroll-behavior', 'none');
+      element.style.setProperty('-webkit-overflow-scrolling', 'auto');
+    }
+  }
+
+  private _syncPageScrollLockHeight(): void {
+    if (!this._pageScrollLock) return;
+    const height = `${Math.max(0, window.innerHeight - 1)}px`;
+    document.documentElement.style.setProperty('height', height);
+    document.body.style.setProperty('height', height);
+  }
+
+  private _unlockPageScrollForFocusedInput(): void {
+    const snapshot = this._pageScrollLock;
+    if (!snapshot) return;
+
+    this._pageScrollLock = null;
+    window.removeEventListener('resize', this._syncPageScrollLockHeight);
+    const html = document.documentElement;
+    const body = document.body;
+    for (const [property, value] of Object.entries(snapshot.html)) {
+      if (value) html.style.setProperty(property, value);
+      else html.style.removeProperty(property);
+    }
+    for (const [property, value] of Object.entries(snapshot.body)) {
+      if (value) body.style.setProperty(property, value);
+      else body.style.removeProperty(property);
+    }
+    window.scrollTo(0, snapshot.scrollY);
   }
 
   private _emit(eventName: DrawerEventName, extraDetail: Partial<DrawerEventDetail> = {}): void {
@@ -866,11 +965,50 @@ export class SmoothDrawer extends HTMLElement {
     return this._detents[this._detents.length - 1]?.height || 0;
   }
 
+  private _onPotentialInputFocus(event: Event): void {
+    const target = event.composedPath()[0];
+    if (!(target instanceof HTMLElement) || !this._isTextInput(target)) return;
+    if (!this.isOpen || !this.contains(target)) return;
+    this._focusedTextInput = target;
+    this._activateOpenGuards();
+    this._hideInputForIOSFocus(target);
+  }
+
+  private _hideInputForIOSFocus(input: HTMLElement): void {
+    const existing = this._focusOpacityGuards.get(input);
+    if (existing) {
+      clearTimeout(existing.timer);
+      input.style.opacity = '0';
+      existing.timer = setTimeout(() => this._restoreFocusOpacityGuard(input), 40);
+      return;
+    }
+
+    const previousOpacity = input.style.opacity;
+    input.style.opacity = '0';
+    const timer = setTimeout(() => this._restoreFocusOpacityGuard(input), 40);
+    this._focusOpacityGuards.set(input, { opacity: previousOpacity, timer });
+  }
+
+  private _restoreFocusOpacityGuard(input: HTMLElement): void {
+    const guard = this._focusOpacityGuards.get(input);
+    if (!guard) return;
+    clearTimeout(guard.timer);
+    input.style.opacity = guard.opacity;
+    this._focusOpacityGuards.delete(input);
+  }
+
+  private _restoreAllFocusOpacityGuards(): void {
+    for (const input of this._focusOpacityGuards.keys()) {
+      this._restoreFocusOpacityGuard(input);
+    }
+  }
+
   private _onFocusIn(event: FocusEvent): void {
     const target = event.composedPath()[0];
     if (!(target instanceof HTMLElement) || !this._isTextInput(target)) return;
     if (!this.contains(target)) return;
 
+    this._hideInputForIOSFocus(target);
     this._focusedTextInput = target;
     if (this.isOpen) this._activateOpenGuards();
 
@@ -881,12 +1019,14 @@ export class SmoothDrawer extends HTMLElement {
     const targetDetent = this._largestKeyboardDetent();
     if (targetDetent) this.snapTo(targetDetent.name, { trigger: 'keyboard' });
     this._syncKeyboardPadding();
-    requestAnimationFrame(() => target.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    requestAnimationFrame(() => this._scrollInputIntoDrawerView(target));
   }
 
   private _onFocusOut(): void {
     if (this._smartKeyboard.restoreTimer) clearTimeout(this._smartKeyboard.restoreTimer);
+    const blurred = this._focusedTextInput;
     this._smartKeyboard.restoreTimer = setTimeout(() => {
+      if (blurred) this._restoreFocusOpacityGuard(blurred);
       const active = document.activeElement;
       if (active instanceof HTMLElement && this.contains(active) && this._isTextInput(active)) return;
       this._deactivateOpenGuards();
@@ -927,6 +1067,21 @@ export class SmoothDrawer extends HTMLElement {
     if (value) this._keyboardSpacer.style.height = value;
     else this._keyboardSpacer.style.removeProperty('height');
     this._cachedContentPadding = value;
+  }
+
+  private _scrollInputIntoDrawerView(input: HTMLElement): void {
+    if (!input.isConnected) return;
+    const inputRect = input.getBoundingClientRect();
+    const contentRect = this._content.getBoundingClientRect();
+    const keyboardHeight = this._smartKeyboard.keyboardHeight || 0;
+    const visibleHeight = Math.max(120, contentRect.height - keyboardHeight);
+    const inputOffset = inputRect.top - contentRect.top + this._content.scrollTop;
+    const targetScrollTop = inputOffset - (visibleHeight / 2) + (inputRect.height / 2);
+
+    this._content.scrollTo({
+      top: Math.max(0, targetScrollTop),
+      behavior: 'smooth'
+    });
   }
 
   private _largestKeyboardDetent(): DrawerDetent | null {
