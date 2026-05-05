@@ -117,6 +117,7 @@ export class SmoothDrawer extends HTMLElement {
   private _viewportGuardScrollY = 0;
   private _viewportGuardRestoreTimers: ReturnType<typeof setTimeout>[] = [];
   private _pageScrollLock: PageScrollLockSnapshot | null = null;
+  private _pendingFocusGuardTimer: ReturnType<typeof setTimeout> | null = null;
   private _focusOpacityGuards = new Map<HTMLElement, {
     opacity: string;
     timer: ReturnType<typeof setTimeout>;
@@ -638,6 +639,10 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _deactivateOpenGuards(): void {
+    if (this._pendingFocusGuardTimer !== null) {
+      clearTimeout(this._pendingFocusGuardTimer);
+      this._pendingFocusGuardTimer = null;
+    }
     this._clearViewportScrollRestores();
 
     if (this._despiaAutoScrollInterval !== null) {
@@ -972,7 +977,16 @@ export class SmoothDrawer extends HTMLElement {
     if (!this.isOpen || !this.contains(target)) return;
     this._focusedTextInput = target;
     this._activateOpenGuards();
-    this._hideInputForIOSFocus(target);
+    this._pendingFocusGuardTimer = setTimeout(() => {
+      this._pendingFocusGuardTimer = null;
+      const active = document.activeElement;
+      if (active === target) return;
+      if (active instanceof HTMLElement && this.contains(active) && this._isTextInput(active)) {
+        this._focusedTextInput = active;
+        return;
+      }
+      this._deactivateOpenGuards();
+    }, 800);
   }
 
   private _hideInputForIOSFocus(input: HTMLElement): void {
@@ -1009,6 +1023,10 @@ export class SmoothDrawer extends HTMLElement {
     if (!(target instanceof HTMLElement) || !this._isTextInput(target)) return;
     if (!this.contains(target)) return;
 
+    if (this._pendingFocusGuardTimer !== null) {
+      clearTimeout(this._pendingFocusGuardTimer);
+      this._pendingFocusGuardTimer = null;
+    }
     this._hideInputForIOSFocus(target);
     this._focusedTextInput = target;
     if (this.isOpen) this._activateOpenGuards();
