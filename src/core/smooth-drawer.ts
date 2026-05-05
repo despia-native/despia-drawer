@@ -667,8 +667,10 @@ export class SmoothDrawer extends HTMLElement {
       this._viewportGuardActive = true;
       this._viewportGuardScrollY = window.scrollY;
       this._lockPageScrollForFocusedInput();
-      window.addEventListener('scroll', this._onGuardScroll, { passive: true });
+      window.addEventListener('scroll', this._onGuardScroll, { passive: true, capture: true });
+      document.addEventListener('scroll', this._onGuardScroll, { passive: true, capture: true });
       window.visualViewport?.addEventListener('resize', this._onGuardViewportResize);
+      window.visualViewport?.addEventListener('scroll', this._onGuardScroll, { passive: true });
     }
     this._queueViewportScrollRestores();
 
@@ -704,8 +706,10 @@ export class SmoothDrawer extends HTMLElement {
 
     if (this._viewportGuardActive) {
       this._viewportGuardActive = false;
-      window.removeEventListener('scroll', this._onGuardScroll);
+      window.removeEventListener('scroll', this._onGuardScroll, { capture: true } as EventListenerOptions);
+      document.removeEventListener('scroll', this._onGuardScroll, { capture: true } as EventListenerOptions);
       window.visualViewport?.removeEventListener('resize', this._onGuardViewportResize);
+      window.visualViewport?.removeEventListener('scroll', this._onGuardScroll);
     }
 
     this._unlockPageScrollForFocusedInput();
@@ -721,10 +725,25 @@ export class SmoothDrawer extends HTMLElement {
     }
   }
 
-  private _onGuardScroll(): void {
+  private _onGuardScroll(event?: Event): void {
     if (!this._viewportGuardActive) return;
+    if (event && event.target instanceof Node && this._track.contains(event.target)) return;
+    if (event && event.target instanceof Node && this._content.contains(event.target)) return;
     if (this._focusedTextInput && this.isOpen) {
       this._restoreViewportScroll();
+      this._reapplyPageScrollLock();
+    }
+  }
+
+  private _reapplyPageScrollLock(): void {
+    if (!this._pageScrollLock) return;
+    const body = document.body;
+    const expectedTop = `${-this._viewportGuardScrollY}px`;
+    if (body.style.position !== 'fixed') {
+      body.style.setProperty('position', 'fixed');
+    }
+    if (body.style.top !== expectedTop) {
+      body.style.setProperty('top', expectedTop);
     }
   }
 
