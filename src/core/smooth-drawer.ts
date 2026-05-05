@@ -78,7 +78,8 @@ type PageScrollLockSnapshot = {
 
 const DEFAULT_DETENTS = 'closed:0, peek:22vh, medium:55vh, large:92vh';
 const CLIP_SLACK = 64;
-const KEYBOARD_EXTRA_PADDING_MAX_VH = 0.09;
+/** Extra scroll room beyond measured keyboard (viewport overlap can lag on focus). */
+const KEYBOARD_EXTRA_PADDING_MAX_VH = 0.15;
 
 export class SmoothDrawer extends HTMLElement {
   static observedAttributes = ['detents', 'detent', 'backdrop', 'theme', 'theme-transition', 'snap-mode'];
@@ -721,7 +722,17 @@ export class SmoothDrawer extends HTMLElement {
 
     const html = document.documentElement;
     const body = document.body;
-    const properties = ['height', 'overflow', 'overscroll-behavior', '-webkit-overflow-scrolling'];
+    const properties = [
+      'height',
+      'overflow',
+      'overscroll-behavior',
+      '-webkit-overflow-scrolling',
+      'position',
+      'top',
+      'left',
+      'right',
+      'width'
+    ];
     const snapshot: PageScrollLockSnapshot = {
       scrollY: this._viewportGuardScrollY,
       html: {},
@@ -736,11 +747,18 @@ export class SmoothDrawer extends HTMLElement {
     this._pageScrollLock = snapshot;
     window.addEventListener('resize', this._syncPageScrollLockHeight);
     this._syncPageScrollLockHeight();
-    for (const element of [html, body]) {
-      element.style.setProperty('overflow', 'hidden');
-      element.style.setProperty('overscroll-behavior', 'none');
-      element.style.setProperty('-webkit-overflow-scrolling', 'auto');
-    }
+    html.style.setProperty('overflow', 'hidden');
+    html.style.setProperty('overscroll-behavior', 'none');
+    html.style.setProperty('-webkit-overflow-scrolling', 'auto');
+
+    body.style.setProperty('overflow', 'hidden');
+    body.style.setProperty('overscroll-behavior', 'none');
+    body.style.setProperty('-webkit-overflow-scrolling', 'auto');
+    body.style.setProperty('position', 'fixed');
+    body.style.setProperty('top', `${-this._viewportGuardScrollY}px`);
+    body.style.setProperty('left', '0');
+    body.style.setProperty('right', '0');
+    body.style.setProperty('width', '100%');
   }
 
   private _syncPageScrollLockHeight(): void {
@@ -1043,8 +1061,18 @@ export class SmoothDrawer extends HTMLElement {
     this.classList.add('keyboard-active');
     const targetDetent = this._largestKeyboardDetent();
     if (targetDetent) this.snapTo(targetDetent.name, { trigger: 'keyboard' });
-    this._syncKeyboardPadding();
-    this._scrollFocusedInputIntoDrawerView();
+    requestAnimationFrame(() => {
+      this._syncKeyboardPadding();
+      this._scrollFocusedInputIntoDrawerView();
+    });
+    setTimeout(() => {
+      this._syncKeyboardPadding();
+      this._scrollFocusedInputIntoDrawerView();
+    }, 120);
+    setTimeout(() => {
+      this._syncKeyboardPadding();
+      this._scrollFocusedInputIntoDrawerView();
+    }, 320);
   }
 
   private _onFocusOut(): void {
@@ -1091,8 +1119,9 @@ export class SmoothDrawer extends HTMLElement {
     const keyboardHeight = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
     this._smartKeyboard.keyboardHeight = keyboardHeight;
     this.classList.toggle('keyboard-active', keyboardHeight > 100);
-    const extraPadding = Math.round(Math.min(96, window.innerHeight * KEYBOARD_EXTRA_PADDING_MAX_VH));
-    this._setContentPadding(keyboardHeight > 0 ? `${keyboardHeight + extraPadding}px` : '');
+    const extraPadding = Math.round(Math.min(140, window.innerHeight * KEYBOARD_EXTRA_PADDING_MAX_VH));
+    const safeGap = 24;
+    this._setContentPadding(keyboardHeight > 0 ? `${keyboardHeight + extraPadding + safeGap}px` : '');
   }
 
   private _setContentPadding(value: string): void {
@@ -1111,10 +1140,20 @@ export class SmoothDrawer extends HTMLElement {
     if (!input.isConnected) return;
     const inputRect = input.getBoundingClientRect();
     const contentRect = this._content.getBoundingClientRect();
-    const keyboardHeight = this._smartKeyboard.keyboardHeight || 0;
-    const visibleHeight = Math.max(120, contentRect.height - keyboardHeight);
+    const viewport = window.visualViewport;
+    const overlapBottom = viewport
+      ? Math.max(0, contentRect.bottom - (viewport.offsetTop + viewport.height))
+      : this._smartKeyboard.keyboardHeight || 0;
+    const visibleTop = contentRect.top;
+    const visibleBottom = contentRect.bottom - overlapBottom;
+    const visibleHeight = Math.max(120, visibleBottom - visibleTop);
     const inputOffset = inputRect.top - contentRect.top + this._content.scrollTop;
-    const targetScrollTop = inputOffset - (visibleHeight / 2) + (inputRect.height / 2);
+    const margin = 16;
+    let targetScrollTop = inputOffset - (visibleHeight / 2) + (inputRect.height / 2);
+    const inputBottomInContent = inputOffset + inputRect.height;
+    const maxScrollForBottom = inputBottomInContent - visibleHeight + margin;
+    const minScrollForTop = inputOffset - margin;
+    targetScrollTop = Math.min(Math.max(targetScrollTop, minScrollForTop), maxScrollForBottom);
 
     this._content.scrollTo({
       top: Math.max(0, targetScrollTop),
@@ -1128,8 +1167,10 @@ export class SmoothDrawer extends HTMLElement {
     this._clearContentAutoScroll();
     requestAnimationFrame(() => this._scrollInputIntoDrawerView(input));
     this._contentAutoScrollTimers.push(
+      setTimeout(() => this._scrollInputIntoDrawerView(input), 80),
       setTimeout(() => this._scrollInputIntoDrawerView(input), 180),
-      setTimeout(() => this._scrollInputIntoDrawerView(input), 360)
+      setTimeout(() => this._scrollInputIntoDrawerView(input), 360),
+      setTimeout(() => this._scrollInputIntoDrawerView(input), 520)
     );
   }
 
