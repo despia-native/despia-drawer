@@ -80,6 +80,8 @@ const DEFAULT_DETENTS = 'closed:0, peek:22vh, medium:55vh, large:92vh';
 const CLIP_SLACK = 64;
 /** Extra scroll room beyond measured keyboard (viewport overlap can lag on focus). */
 const KEYBOARD_EXTRA_PADDING_MAX_VH = 0.15;
+/** Keep focused fields comfortably above the keyboard so nearby fields are easy to tap. */
+const KEYBOARD_SCROLL_COMFORT_MAX_VH = 0.12;
 
 export class SmoothDrawer extends HTMLElement {
   static observedAttributes = ['detents', 'detent', 'backdrop', 'theme', 'theme-transition', 'snap-mode'];
@@ -123,6 +125,8 @@ export class SmoothDrawer extends HTMLElement {
   private _pendingFocusGuardTimer: ReturnType<typeof setTimeout> | null = null;
   private _focusedTextInput: HTMLElement | null = null;
   private _skipKeyboardRestore = false;
+  private _lastLayoutWidth = 0;
+  private _lastLayoutHeight = 0;
 
   private _smartKeyboard: SmartKeyboardState = {
     previousDetent: null,
@@ -302,6 +306,8 @@ export class SmoothDrawer extends HTMLElement {
           touch-action: pan-y;
           overscroll-behavior-y: contain;
           overscroll-behavior-x: none;
+          contain: layout paint;
+          will-change: scroll-position;
         }
 
         :host([hide-scrollbar]) .content {
@@ -315,7 +321,6 @@ export class SmoothDrawer extends HTMLElement {
         .keyboard-spacer {
           flex-shrink: 0;
           height: 0;
-          transition: height 200ms ease;
         }
       </style>
 
@@ -355,8 +360,9 @@ export class SmoothDrawer extends HTMLElement {
     this._onPotentialInputFocus = this._onPotentialInputFocus.bind(this);
     this._clearContentAutoScroll = this._clearContentAutoScroll.bind(this);
     this._syncPageScrollLockHeight = this._syncPageScrollLockHeight.bind(this);
+    this._onResizeCheck = this._onResizeCheck.bind(this);
 
-    this._resizeObserver = new ResizeObserver(this._updateLayout);
+    this._resizeObserver = new ResizeObserver(this._onResizeCheck);
   }
 
   connectedCallback(): void {
@@ -374,7 +380,7 @@ export class SmoothDrawer extends HTMLElement {
     this.addEventListener('touchstart', this._onPotentialInputFocus, { capture: true, passive: false });
     this.addEventListener('focusin', this._onFocusIn);
     this.addEventListener('focusout', this._onFocusOut);
-    window.addEventListener('resize', this._updateLayout);
+    window.addEventListener('resize', this._onResizeCheck);
     window.visualViewport?.addEventListener('resize', this._onVisualViewportResize);
     this._resizeObserver.observe(this);
 
@@ -398,7 +404,7 @@ export class SmoothDrawer extends HTMLElement {
     this.removeEventListener('touchstart', this._onPotentialInputFocus, { capture: true });
     this.removeEventListener('focusin', this._onFocusIn);
     this.removeEventListener('focusout', this._onFocusOut);
-    window.removeEventListener('resize', this._updateLayout);
+    window.removeEventListener('resize', this._onResizeCheck);
     window.visualViewport?.removeEventListener('resize', this._onVisualViewportResize);
     this._resizeObserver.disconnect();
     if (this._scrollTimeout !== null) clearTimeout(this._scrollTimeout);
@@ -553,8 +559,20 @@ export class SmoothDrawer extends HTMLElement {
     return Number.isFinite(n) ? n : 0;
   }
 
+  private _onResizeCheck(): void {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const widthChanged = width !== this._lastLayoutWidth;
+    const heightDelta = Math.abs(height - this._lastLayoutHeight);
+    if (this._lastLayoutWidth && !widthChanged && heightDelta < 150) return;
+    this._updateLayout();
+  }
+
   private _updateLayout(): void {
     if (!this._detentsRaw.length) return;
+
+    this._lastLayoutWidth = window.innerWidth;
+    this._lastLayoutHeight = window.innerHeight;
 
     this._detents = this._detentsRaw
       .map(d => {
@@ -1018,6 +1036,7 @@ export class SmoothDrawer extends HTMLElement {
     const previousScrollTop = this._lastTrackScrollTop;
     this._lastTrackScrollTop = scrollTop;
     if (!this._focusedTextInput || !this.isOpen) return;
+    if (!this._isKeyboardInput(this._focusedTextInput)) return;
     if (scrollTop >= previousScrollTop - 8) return;
     if (document.activeElement !== this._focusedTextInput) return;
 
@@ -1069,6 +1088,7 @@ export class SmoothDrawer extends HTMLElement {
     if (this.isOpen) this._activateOpenGuards();
 
     if (!this.hasAttribute('smart-keyboard')) return;
+    if (!this._isKeyboardInput(target)) return;
     if (this._smartKeyboard.restoreTimer) clearTimeout(this._smartKeyboard.restoreTimer);
     this._smartKeyboard.previousDetent ||= this.detent;
     this.classList.add('keyboard-active');
@@ -1111,8 +1131,7 @@ export class SmoothDrawer extends HTMLElement {
 
   private _onVisualViewportResize(): void {
     if (!this.hasAttribute('smart-keyboard')) return;
-    if (!this.isOpen || !this._focusedTextInput) {
-      this._deactivateOpenGuards();
+    if (!this.isOpen || !this._focusedTextInput || !this._isKeyboardInput(this._focusedTextInput)) {
       this.classList.remove('keyboard-active');
       this._setContentPadding('');
       return;
@@ -1133,8 +1152,8 @@ export class SmoothDrawer extends HTMLElement {
     this._smartKeyboard.keyboardHeight = keyboardHeight;
     this.classList.toggle('keyboard-active', keyboardHeight > 100);
     const extraPadding = Math.round(Math.min(140, window.innerHeight * KEYBOARD_EXTRA_PADDING_MAX_VH));
-    const safeGap = 24;
-    this._setContentPadding(keyboardHeight > 0 ? `${keyboardHeight + extraPadding + safeGap}px` : '');
+    const comfortGap = Math.round(Math.min(120, window.innerHeight * KEYBOARD_SCROLL_COMFORT_MAX_VH));
+    this._setContentPadding(keyboardHeight > 0 ? `${keyboardHeight + extraPadding + comfortGap}px` : '');
   }
 
   private _setContentPadding(value: string): void {
@@ -1159,17 +1178,24 @@ export class SmoothDrawer extends HTMLElement {
       : this._smartKeyboard.keyboardHeight || 0;
     const visibleTop = contentRect.top;
     const visibleBottom = contentRect.bottom - overlapBottom;
-    const visibleHeight = Math.max(120, visibleBottom - visibleTop);
-    const inputOffset = inputRect.top - contentRect.top + this._content.scrollTop;
-    const margin = 16;
-    let targetScrollTop = inputOffset - (visibleHeight / 2) + (inputRect.height / 2);
-    const inputBottomInContent = inputOffset + inputRect.height;
-    const maxScrollForBottom = inputBottomInContent - visibleHeight + margin;
-    const minScrollForTop = inputOffset - margin;
-    targetScrollTop = Math.min(Math.max(targetScrollTop, minScrollForTop), maxScrollForBottom);
+    const topMargin = 16;
+    const closeToKeyboard = 32;
+    const comfortGap = Math.round(Math.min(120, window.innerHeight * KEYBOARD_SCROLL_COMFORT_MAX_VH));
+    const comfortableBottom = visibleBottom - comfortGap;
+    let targetScrollTop = this._content.scrollTop;
+
+    if (inputRect.bottom > visibleBottom - closeToKeyboard) {
+      targetScrollTop += inputRect.bottom - comfortableBottom;
+    } else if (inputRect.top < visibleTop + topMargin) {
+      targetScrollTop -= (visibleTop + topMargin) - inputRect.top;
+    }
+
+    const maxScrollTop = Math.max(0, this._content.scrollHeight - this._content.clientHeight);
+    targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
+    if (Math.abs(targetScrollTop - this._content.scrollTop) < 2) return;
 
     this._content.scrollTo({
-      top: Math.max(0, targetScrollTop),
+      top: targetScrollTop,
       behavior: 'smooth'
     });
   }
@@ -1192,6 +1218,14 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _isTextInput(el: HTMLElement): boolean {
+    if (el instanceof HTMLTextAreaElement) return true;
+    if (el instanceof HTMLSelectElement) return true;
+    if (!(el instanceof HTMLInputElement)) return false;
+    if (['button', 'submit', 'reset', 'image', 'hidden', 'checkbox', 'radio'].includes(el.type)) return false;
+    return true;
+  }
+
+  private _isKeyboardInput(el: HTMLElement): boolean {
     if (el instanceof HTMLTextAreaElement) return true;
     if (!(el instanceof HTMLInputElement)) return false;
     return ['text', 'search', 'email', 'url', 'tel', 'password', 'number'].includes(el.type);

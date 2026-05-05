@@ -214,6 +214,10 @@ pnpm typecheck
 
 The vanilla demo lives at `examples/vanilla/index.html` and is deployed to GitHub Pages from the `main` branch.
 
+## Maintenance
+
+This project is fully maintained and taken care of by the [Despia](https://setup.despia.com) team. Contributions are not needed, but always appreciated.
+
 ## License
 
 MIT
