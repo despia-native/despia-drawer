@@ -396,6 +396,7 @@ export class SmoothDrawer extends HTMLElement {
     this._onVisualViewportResize = this._onVisualViewportResize.bind(this);
     this._onGuardViewportResize = this._onGuardViewportResize.bind(this);
     this._onGuardScroll = this._onGuardScroll.bind(this);
+    this._onVisualViewportShift = this._onVisualViewportShift.bind(this);
     this._onPotentialInputFocus = this._onPotentialInputFocus.bind(this);
     this._clearContentAutoScroll = this._clearContentAutoScroll.bind(this);
     this._onResizeCheck = this._onResizeCheck.bind(this);
@@ -717,7 +718,8 @@ export class SmoothDrawer extends HTMLElement {
       window.addEventListener('scroll', this._onGuardScroll, { passive: true, capture: true });
       document.addEventListener('scroll', this._onGuardScroll, { passive: true, capture: true });
       window.visualViewport?.addEventListener('resize', this._onGuardViewportResize);
-      window.visualViewport?.addEventListener('scroll', this._onGuardScroll, { passive: true });
+      window.visualViewport?.addEventListener('scroll', this._onVisualViewportShift, { passive: true });
+      window.visualViewport?.addEventListener('resize', this._onVisualViewportShift);
     }
     this._queueViewportScrollRestores();
 
@@ -756,7 +758,8 @@ export class SmoothDrawer extends HTMLElement {
       window.removeEventListener('scroll', this._onGuardScroll, { capture: true } as EventListenerOptions);
       document.removeEventListener('scroll', this._onGuardScroll, { capture: true } as EventListenerOptions);
       window.visualViewport?.removeEventListener('resize', this._onGuardViewportResize);
-      window.visualViewport?.removeEventListener('scroll', this._onGuardScroll);
+      window.visualViewport?.removeEventListener('scroll', this._onVisualViewportShift);
+      window.visualViewport?.removeEventListener('resize', this._onVisualViewportShift);
     }
 
     this._unlockPageScrollForFocusedInput();
@@ -785,13 +788,27 @@ export class SmoothDrawer extends HTMLElement {
   private _reapplyPageScrollLock(): void {
     if (!this._pageScrollLock) return;
     const body = document.body;
-    const expectedTop = `${-this._viewportGuardScrollY}px`;
+    const expectedTop = this._currentLockedBodyTop();
     if (body.style.position !== 'fixed') {
       body.style.setProperty('position', 'fixed');
     }
     if (body.style.top !== expectedTop) {
       body.style.setProperty('top', expectedTop);
     }
+  }
+
+  private _onVisualViewportShift(): void {
+    if (!this._pageScrollLock) return;
+    const body = document.body;
+    const expectedTop = this._currentLockedBodyTop();
+    if (body.style.top !== expectedTop) {
+      body.style.setProperty('top', expectedTop);
+    }
+  }
+
+  private _currentLockedBodyTop(): string {
+    const offset = window.visualViewport?.offsetTop ?? 0;
+    return `${offset - this._viewportGuardScrollY}px`;
   }
 
   private _queueViewportScrollRestores(): void {
@@ -854,7 +871,7 @@ export class SmoothDrawer extends HTMLElement {
     body.style.setProperty('overflow', 'hidden');
     body.style.setProperty('overscroll-behavior', 'none');
     body.style.setProperty('position', 'fixed');
-    body.style.setProperty('top', `${-scrollY}px`);
+    body.style.setProperty('top', this._currentLockedBodyTop());
     body.style.setProperty('left', '0');
     body.style.setProperty('right', '0');
     body.style.setProperty('width', '100%');
