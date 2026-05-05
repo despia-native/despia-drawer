@@ -16,6 +16,17 @@ const createDrawer = async (attrs: Record<string, string> = {}) => {
   return drawer;
 };
 
+const touchEvent = (type: string, y: number) => {
+  const event = new Event(type, { bubbles: true, cancelable: true, composed: true }) as Event & {
+    touches: Array<{ clientX: number; clientY: number }>;
+  };
+  Object.defineProperty(event, 'touches', {
+    value: type === 'touchend' || type === 'touchcancel' ? [] : [{ clientX: 0, clientY: y }],
+    configurable: true
+  });
+  return event;
+};
+
 describe('smooth-drawer', () => {
   it('parses detents and injects a closed detent', async () => {
     const drawer = await createDrawer({ detents: 'peek:20vh, large:80dvh' });
@@ -63,6 +74,94 @@ describe('smooth-drawer', () => {
     vi.advanceTimersByTime(130);
 
     expect(document.documentElement.style.overflow).toBe('');
+  });
+
+  it('reuses the focus lock during rapid focus changes inside the drawer', async () => {
+    const drawer = await createDrawer({ detents: 'closed:0, large:80vh', 'smart-keyboard': '' });
+    const first = document.createElement('input');
+    const second = document.createElement('input');
+    drawer.append(first, second);
+
+    drawer.show('large', { animate: false });
+    first.focus();
+    first.dispatchEvent(new FocusEvent('focusin', { bubbles: true, composed: true }));
+    await tick();
+
+    first.dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true }));
+    second.focus();
+    second.dispatchEvent(new FocusEvent('focusin', { bubbles: true, composed: true }));
+    vi.advanceTimersByTime(130);
+
+    expect(document.documentElement.style.overflow).toBe('hidden');
+    expect(document.activeElement).toBe(second);
+  });
+
+  it('does not blur a focused input from tiny drawer scroll noise', async () => {
+    const drawer = await createDrawer({ detents: 'closed:0, large:120px', 'smart-keyboard': '' });
+    const track = drawer.shadowRoot?.querySelector('.track') as HTMLDivElement;
+    const input = document.createElement('input');
+    drawer.appendChild(input);
+
+    drawer.show('large', { animate: false });
+    input.focus();
+    input.dispatchEvent(new FocusEvent('focusin', { bubbles: true, composed: true }));
+    await tick();
+
+    track.scrollTop = 100;
+    track.dispatchEvent(new Event('scroll'));
+    vi.runOnlyPendingTimers();
+    track.scrollTop = 93;
+    track.dispatchEvent(new Event('scroll'));
+    vi.runOnlyPendingTimers();
+
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('keeps keyboard-active stable with inset hysteresis', async () => {
+    const viewport = new EventTarget() as EventTarget & {
+      width: number;
+      height: number;
+      offsetTop: number;
+      offsetLeft: number;
+      pageTop: number;
+      pageLeft: number;
+      scale: number;
+    };
+    Object.assign(viewport, {
+      width: 390,
+      height: 660,
+      offsetTop: 0,
+      offsetLeft: 0,
+      pageTop: 0,
+      pageLeft: 0,
+      scale: 1
+    });
+    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
+    Object.defineProperty(window, 'visualViewport', { value: viewport, configurable: true });
+
+    const drawer = await createDrawer({ detents: 'closed:0, large:80vh', 'smart-keyboard': '' });
+    const input = document.createElement('input');
+    drawer.appendChild(input);
+
+    drawer.show('large', { animate: false });
+    input.focus();
+    input.dispatchEvent(new FocusEvent('focusin', { bubbles: true, composed: true }));
+    viewport.dispatchEvent(new Event('resize'));
+    await tick();
+
+    expect(drawer.classList.contains('keyboard-active')).toBe(true);
+
+    viewport.height = 730;
+    viewport.dispatchEvent(new Event('resize'));
+    await tick();
+
+    expect(drawer.classList.contains('keyboard-active')).toBe(true);
+
+    viewport.height = 760;
+    viewport.dispatchEvent(new Event('resize'));
+    await tick();
+
+    expect(drawer.classList.contains('keyboard-active')).toBe(false);
   });
 
   it('does not close from backdrop or Escape when dismissable is false', async () => {
@@ -159,5 +258,47 @@ describe('smooth-drawer', () => {
     track.dispatchEvent(new Event('scroll'));
 
     expect(track.scrollTop).toBe(50);
+  });
+
+  it('suppresses focused-input auto-scroll while content is actively touched', async () => {
+    const drawer = await createDrawer({ detents: 'closed:0, large:80vh', 'smart-keyboard': '' });
+    const content = drawer.shadowRoot?.querySelector('.content') as HTMLDivElement;
+    const input = document.createElement('input');
+    drawer.appendChild(input);
+    const scrollSpy = vi.spyOn(content, 'scrollTo');
+
+    Object.defineProperty(content, 'scrollHeight', { value: 1200, configurable: true });
+    Object.defineProperty(content, 'clientHeight', { value: 400, configurable: true });
+    content.getBoundingClientRect = () => ({
+      x: 0,
+      y: 0,
+      width: 390,
+      height: 400,
+      top: 0,
+      right: 390,
+      bottom: 400,
+      left: 0,
+      toJSON: () => ({})
+    });
+    input.getBoundingClientRect = () => ({
+      x: 0,
+      y: 520,
+      width: 320,
+      height: 40,
+      top: 520,
+      right: 320,
+      bottom: 560,
+      left: 0,
+      toJSON: () => ({})
+    });
+
+    drawer.show('large', { animate: false });
+    content.dispatchEvent(touchEvent('touchstart', 200));
+    scrollSpy.mockClear();
+    input.focus();
+    input.dispatchEvent(new FocusEvent('focusin', { bubbles: true, composed: true }));
+    await tick();
+
+    expect(scrollSpy).not.toHaveBeenCalledWith(expect.objectContaining({ top: expect.any(Number) }));
   });
 });

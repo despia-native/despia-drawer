@@ -258,6 +258,30 @@
         font-size: 12px;
       }
 
+      .qa-strip {
+        display: grid;
+        gap: 10px;
+        padding-top: 2px;
+      }
+
+      .qa-strip strong {
+        font-size: 13px;
+      }
+
+      .qa-metrics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .qa-metrics span {
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: #fff;
+      }
+
       .tap-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -529,6 +553,20 @@
               <button class="pill" type="button" data-dismissable>Lock dismissal</button>
               <button class="pill" type="button" data-open-secondary>Open second drawer</button>
             </div>
+            <div class="qa-strip" aria-label="Mobile QA controls">
+              <strong>Mobile QA</strong>
+              <div class="control-row">
+                <button class="pill" type="button" data-scroll-page>Scroll page 50%</button>
+                <button class="pill" type="button" data-focus-field="first">Focus first</button>
+                <button class="pill" type="button" data-focus-field="middle">Focus middle</button>
+                <button class="pill" type="button" data-focus-field="last">Focus last</button>
+              </div>
+              <div class="qa-metrics">
+                <span id="page-scroll-metric">scrollY: 0</span>
+                <span id="viewport-metric">viewport: 0x0</span>
+                <span id="drawer-scroll-metric">drawer scroll: 0</span>
+              </div>
+            </div>
             <p class="state-line">Current state: <span id="page-state">peek · init</span></p>
             <ul class="edge-status" aria-label="Runtime status">
               <li id="keyboard-status">Keyboard: resizes-content</li>
@@ -565,7 +603,7 @@
       <footer class="footer">
         <span>Despia Drawer demo</span>
         <span>
-          <code id="version-label">v0.0.19</code>
+          <code id="version-label">v0.0.20</code>
           <a href="https://setup.despia.com" target="_blank" rel="noreferrer">Despia Native</a>
         </span>
       </footer>
@@ -681,6 +719,9 @@
       const pageState = document.getElementById('page-state');
       const dismissStatus = document.getElementById('dismiss-status');
       const keyboardStatus = document.getElementById('keyboard-status');
+      const pageScrollMetric = document.getElementById('page-scroll-metric');
+      const viewportMetric = document.getElementById('viewport-metric');
+      const drawerScrollMetric = document.getElementById('drawer-scroll-metric');
 
       keyboardStatus.textContent = document.querySelector('meta[name="viewport"]')?.content.includes('interactive-widget=resizes-content')
         ? 'Keyboard: resizes-content'
@@ -717,6 +758,23 @@
         secondaryDrawer.hide();
       });
 
+      document.querySelector('[data-scroll-page]').addEventListener('click', () => {
+        window.scrollTo({ top: document.body.scrollHeight * 0.5, behavior: 'smooth' });
+      });
+
+      document.querySelectorAll('[data-focus-field]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const fields = Array.from(drawer.querySelectorAll('input[type="text"], input[type="email"], textarea'));
+          const index = button.dataset.focusField === 'first'
+            ? 0
+            : button.dataset.focusField === 'middle'
+              ? Math.floor(fields.length / 2)
+              : fields.length - 1;
+          drawer.show('large');
+          requestAnimationFrame(() => fields[index]?.focus({ preventScroll: true }));
+        });
+      });
+
       document.querySelector('.demo-form').addEventListener('submit', (event) => {
         event.preventDefault();
         state.textContent = 'Saved · form stayed in place';
@@ -736,6 +794,21 @@
         state.textContent = value;
         pageState.textContent = value;
       });
+
+      const updateMetrics = () => {
+        const viewport = window.visualViewport;
+        pageScrollMetric.textContent = `scrollY: ${Math.round(window.scrollY)}`;
+        viewportMetric.textContent = viewport
+          ? `vv: ${Math.round(viewport.width)}x${Math.round(viewport.height)} +${Math.round(viewport.offsetTop)}`
+          : `viewport: ${window.innerWidth}x${window.innerHeight}`;
+        drawerScrollMetric.textContent = `drawer scroll: ${Math.round(drawer.shadowRoot.querySelector('.content').scrollTop)}`;
+      };
+
+      updateMetrics();
+      window.addEventListener('scroll', updateMetrics, { passive: true });
+      window.addEventListener('resize', updateMetrics);
+      window.visualViewport?.addEventListener('resize', updateMetrics);
+      drawer.shadowRoot.querySelector('.content').addEventListener('scroll', updateMetrics, { passive: true });
     </script>
   </body>
 </html>

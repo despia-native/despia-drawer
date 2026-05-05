@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.20
+
+- Refined mobile touch gesture arbitration so inner content scrolling, sheet dragging, and taps/focus no longer fight each other.
+- Replaced fixed focus follow-up timers with viewport/detent stabilization before focused-field auto-scroll.
+- Hardened keyboard inset hysteresis and added mobile QA controls plus focused regression coverage.
+
 ## 0.0.19
 
 - Hardened iOS/PWA edge cases around focus locks, viewport meta normalization, keyboard padding, stacked drawer handoff, and dismissable scroll clamping.
