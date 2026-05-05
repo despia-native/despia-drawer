@@ -85,6 +85,8 @@ const KEYBOARD_SCROLL_COMFORT_MAX_VH = 0.12;
 
 export class SmoothDrawer extends HTMLElement {
   static observedAttributes = ['detents', 'detent', 'backdrop', 'theme', 'theme-transition', 'snap-mode'];
+  private static readonly _stackBaseZIndex = 999;
+  private static _openStack: SmoothDrawer[] = [];
 
   private _track!: HTMLDivElement;
   private _backdrop!: HTMLDivElement;
@@ -121,6 +123,8 @@ export class SmoothDrawer extends HTMLElement {
   private _viewportGuardScrollY = 0;
   private _viewportGuardRestoreTimers: ReturnType<typeof setTimeout>[] = [];
   private _contentAutoScrollTimers: ReturnType<typeof setTimeout>[] = [];
+  private _lastContentAutoScrollAt = 0;
+  private _lastContentAutoScrollTop = 0;
   private _pageScrollLock: PageScrollLockSnapshot | null = null;
   private _pendingFocusGuardTimer: ReturnType<typeof setTimeout> | null = null;
   private _focusedTextInput: HTMLElement | null = null;
@@ -196,6 +200,10 @@ export class SmoothDrawer extends HTMLElement {
           pointer-events: auto;
         }
 
+        :host(.stacked-behind) .backdrop {
+          pointer-events: none !important;
+        }
+
         .track {
           position: fixed;
           left: 0;
@@ -212,6 +220,10 @@ export class SmoothDrawer extends HTMLElement {
           -webkit-overflow-scrolling: touch;
           scrollbar-width: none;
           clip-path: inset(100% 0 0 0);
+        }
+
+        :host(.stacked-behind) .track {
+          pointer-events: none;
         }
 
         .track::-webkit-scrollbar {
@@ -414,6 +426,7 @@ export class SmoothDrawer extends HTMLElement {
     this._clearContentAutoScroll();
     this._deactivateOpenGuards();
     this._setDespiaAutoScroll(true);
+    this._markClosedInStack();
   }
 
   attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null): void {
@@ -612,6 +625,7 @@ export class SmoothDrawer extends HTMLElement {
     if (!target) return;
 
     this._lastTrigger = trigger;
+    if (target.name !== 'closed') this._markOpenInStack();
     if (target.name !== 'closed') this._activateGuardsForActiveInput();
     this._emit('detent-changing', { targetDetent: target.name });
     this._track.scrollTo({
@@ -671,7 +685,7 @@ export class SmoothDrawer extends HTMLElement {
     if (!this.isOpen) return;
 
     const active = document.activeElement;
-    if (active instanceof HTMLElement && this.contains(active) && this._isTextInput(active)) {
+    if (active instanceof HTMLElement && this.contains(active) && this._isKeyboardInput(active)) {
       this._focusedTextInput = active;
       this._activateOpenGuards();
     }
@@ -827,6 +841,14 @@ export class SmoothDrawer extends HTMLElement {
   private _updateBackdropOpacity(): void {
     if (!this._detents.length) return;
 
+    if (!this._isTopMostInStack()) {
+      if ('0.000' !== this._cachedBackdropOpacity) {
+        this._backdrop.style.opacity = '0';
+        this._cachedBackdropOpacity = '0.000';
+      }
+      return;
+    }
+
     const opacity = this._computeBackdropOpacity(this._track.scrollTop);
     const value = opacity.toFixed(3);
     if (value !== this._cachedBackdropOpacity) {
@@ -846,15 +868,16 @@ export class SmoothDrawer extends HTMLElement {
     if (this._backdropFrame) return;
     this._backdropFrame = requestAnimationFrame(() => {
       this._backdropFrame = 0;
+      const isTopMost = this._isTopMostInStack();
       const h = this._track.scrollTop;
       const opacity = this._computeBackdropOpacity(h);
-      const interactive = opacity > 0.05 && this._isBackdropInteractive(h);
+      const interactive = isTopMost && opacity > 0.05 && this._isBackdropInteractive(h);
       if (interactive !== this._cachedBackdropInteractive) {
         this._backdrop.classList.toggle('interactive', interactive);
         this._cachedBackdropInteractive = interactive;
       }
 
-      const backdropActive = interactive || opacity > 0.05;
+      const backdropActive = isTopMost && (interactive || opacity > 0.05);
       const wasBackdropActive = this.classList.contains('backdrop-active');
       if (backdropActive !== wasBackdropActive) {
         this.classList.toggle('backdrop-active', backdropActive);
@@ -916,18 +939,21 @@ export class SmoothDrawer extends HTMLElement {
       }
 
       if (settled.name === 'closed') {
+        this._markClosedInStack();
         this._deactivateOpenGuards();
       }
     }, 120);
   }
 
   private _onClosedClick(): void {
+    if (!this._isTopMostInStack()) return;
     if (this._cachedBackdropInteractive) {
       this.snapTo('closed', { trigger: 'user' });
     }
   }
 
   private _onBackdropClick(): void {
+    if (!this._isTopMostInStack()) return;
     this.snapTo('closed', { trigger: 'user' });
   }
 
@@ -1045,9 +1071,11 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _onPotentialInputFocus(event: Event): void {
+    if (!this._isTopMostInStack()) return;
     const target = event.composedPath()[0];
     if (!(target instanceof HTMLElement) || !this._isTextInput(target)) return;
     if (!this.isOpen || !this.contains(target)) return;
+    if (!this._isKeyboardInput(target)) return;
     this._focusedTextInput = target;
     this._activateOpenGuards();
     this._focusInputWithoutViewportJump(target, event);
@@ -1079,6 +1107,7 @@ export class SmoothDrawer extends HTMLElement {
     const target = event.composedPath()[0];
     if (!(target instanceof HTMLElement) || !this._isTextInput(target)) return;
     if (!this.contains(target)) return;
+    if (!this._isKeyboardInput(target)) return;
 
     if (this._pendingFocusGuardTimer !== null) {
       clearTimeout(this._pendingFocusGuardTimer);
@@ -1086,9 +1115,7 @@ export class SmoothDrawer extends HTMLElement {
     }
     this._focusedTextInput = target;
     if (this.isOpen) this._activateOpenGuards();
-
     if (!this.hasAttribute('smart-keyboard')) return;
-    if (!this._isKeyboardInput(target)) return;
     if (this._smartKeyboard.restoreTimer) clearTimeout(this._smartKeyboard.restoreTimer);
     this._smartKeyboard.previousDetent ||= this.detent;
     this.classList.add('keyboard-active');
@@ -1166,6 +1193,8 @@ export class SmoothDrawer extends HTMLElement {
   private _clearContentAutoScroll(): void {
     for (const timer of this._contentAutoScrollTimers) clearTimeout(timer);
     this._contentAutoScrollTimers = [];
+    this._lastContentAutoScrollAt = 0;
+    this._lastContentAutoScrollTop = this._content.scrollTop;
   }
 
   private _scrollInputIntoDrawerView(input: HTMLElement): void {
@@ -1194,10 +1223,18 @@ export class SmoothDrawer extends HTMLElement {
     targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
     if (Math.abs(targetScrollTop - this._content.scrollTop) < 2) return;
 
+    const now = performance.now();
+    const recentlyAutoScrolled = now - this._lastContentAutoScrollAt < 180;
+    const closeToLastTarget = Math.abs(targetScrollTop - this._lastContentAutoScrollTop) < 24;
+    if (recentlyAutoScrolled && closeToLastTarget) return;
+
+    const behavior: ScrollBehavior = recentlyAutoScrolled ? 'auto' : 'smooth';
     this._content.scrollTo({
       top: targetScrollTop,
-      behavior: 'smooth'
+      behavior
     });
+    this._lastContentAutoScrollAt = now;
+    this._lastContentAutoScrollTop = targetScrollTop;
   }
 
   private _scrollFocusedInputIntoDrawerView(): void {
@@ -1215,6 +1252,43 @@ export class SmoothDrawer extends HTMLElement {
 
   private _largestKeyboardDetent(): DrawerDetent | null {
     return [...this._detents].reverse().find(d => d.name !== 'closed') || null;
+  }
+
+  private _isTopMostInStack(): boolean {
+    const stack = SmoothDrawer._openStack;
+    return stack.length === 0 || stack[stack.length - 1] === this;
+  }
+
+  private _markOpenInStack(): void {
+    const stack = SmoothDrawer._openStack;
+    const existingIndex = stack.indexOf(this);
+    if (existingIndex >= 0) stack.splice(existingIndex, 1);
+    stack.push(this);
+    SmoothDrawer._syncStackLayers();
+  }
+
+  private _markClosedInStack(): void {
+    const stack = SmoothDrawer._openStack;
+    const existingIndex = stack.indexOf(this);
+    if (existingIndex >= 0) stack.splice(existingIndex, 1);
+    this.classList.remove('stacked-behind');
+    this.style.removeProperty('--drawer-z-index');
+    SmoothDrawer._syncStackLayers();
+  }
+
+  private _applyStackLayer(layerIndex: number, isTopMost: boolean): void {
+    const z = SmoothDrawer._stackBaseZIndex + layerIndex;
+    this.style.setProperty('--drawer-z-index', `${z}`);
+    this.classList.toggle('stacked-behind', !isTopMost);
+    this._updateBackdropOpacity();
+    this._updateBackdrop();
+  }
+
+  private static _syncStackLayers(): void {
+    const stack = SmoothDrawer._openStack;
+    stack.forEach((drawer, index) => {
+      drawer._applyStackLayer(index, index === stack.length - 1);
+    });
   }
 
   private _isTextInput(el: HTMLElement): boolean {

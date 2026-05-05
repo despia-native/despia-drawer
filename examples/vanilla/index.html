@@ -5,15 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta
       name="description"
-      content="@despia/drawer — an iOS-style bottom sheet using native CSS scroll-snap. Open source."
+      content="@despia/drawer demo - native-feeling iOS-style bottom sheet with clean mobile-first UI."
     />
-    <title>@despia/drawer</title>
+    <title>@despia/drawer - Demo</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
       *,
       *::before,
@@ -22,31 +19,37 @@
       }
 
       :root {
-        --bg: #ffffff;
-        --text: #0a0a0a;
-        --text-muted: #737373;
-        --border: #ededed;
-        --border-strong: #0a0a0a;
-        --max: 960px;
-        --font: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+        --bg: #f5f7fb;
+        --surface: #ffffff;
+        --surface-soft: #f8fafc;
+        --text: #0f172a;
+        --muted: #64748b;
+        --line: #e2e8f0;
+        --line-strong: #cbd5e1;
+        --brand: #0f172a;
+        --brand-soft: #334155;
+        --radius-xl: 28px;
+        --radius-lg: 20px;
+        --radius-md: 14px;
+        --shadow-soft: 0 10px 30px rgba(15, 23, 42, 0.08);
+        --shadow-card: 0 12px 36px rgba(15, 23, 42, 0.08);
       }
 
       html {
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-        scroll-behavior: smooth;
       }
 
       body {
         margin: 0;
         min-height: 100dvh;
-        background: var(--bg);
+        background:
+          radial-gradient(circle at 0% 0%, #e2e8f0 0%, transparent 35%),
+          radial-gradient(circle at 100% 0%, #dbeafe 0%, transparent 30%),
+          var(--bg);
         color: var(--text);
-        font-family: var(--font);
-        font-size: 17px;
-        line-height: 1.55;
-        letter-spacing: -0.01em;
+        font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        line-height: 1.45;
       }
 
       a {
@@ -54,346 +57,358 @@
         text-decoration: none;
       }
 
-      a:hover {
-        opacity: 0.7;
-      }
-
-      .container {
-        max-width: var(--max);
+      .shell {
+        width: min(100%, 1080px);
         margin: 0 auto;
-        padding: 0 24px;
+        padding: 0 16px 100px;
       }
 
-      /* Nav */
       .nav {
         position: sticky;
         top: 0;
-        z-index: 10;
-        background: rgba(255, 255, 255, 0.85);
-        backdrop-filter: saturate(180%) blur(20px);
-        -webkit-backdrop-filter: saturate(180%) blur(20px);
-        border-bottom: 1px solid var(--border);
+        z-index: 20;
+        backdrop-filter: blur(12px) saturate(180%);
+        -webkit-backdrop-filter: blur(12px) saturate(180%);
+        background: rgba(245, 247, 251, 0.72);
+        border-bottom: 1px solid rgba(203, 213, 225, 0.6);
       }
 
       .nav-inner {
+        width: min(100%, 1080px);
+        margin: 0 auto;
+        height: 64px;
+        padding: 0 16px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        height: 56px;
       }
 
-      .nav-brand {
+      .brand {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        font-weight: 600;
-        font-size: 15px;
-        letter-spacing: -0.01em;
+        gap: 10px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
       }
 
-      .nav-brand-mark {
-        width: 22px;
-        height: 22px;
-        border-radius: 6px;
-        background: var(--text);
+      .brand-badge {
+        width: 28px;
+        height: 28px;
+        border-radius: 9px;
+        background: linear-gradient(140deg, #0f172a, #334155);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
       }
 
       .nav-links {
-        display: flex;
+        display: inline-flex;
         align-items: center;
-        gap: 28px;
-        font-size: 14px;
-        color: var(--text-muted);
+        gap: 10px;
       }
 
-      .nav-links a {
-        font-weight: 500;
-      }
-
-      /* Hero */
-      .hero {
-        padding: 120px 0 96px;
-        text-align: left;
-      }
-
-      .hero-eyebrow {
-        margin: 0 0 28px;
+      .link-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 36px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.72);
         font-size: 13px;
-        font-weight: 500;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--text-muted);
+        font-weight: 600;
       }
 
-      .hero h1 {
-        margin: 0 0 24px;
-        font-size: clamp(40px, 7vw, 76px);
+      .hero {
+        padding: 30px 0 20px;
+      }
+
+      .hero-card {
+        background: linear-gradient(160deg, #ffffff 0%, #f8fafc 100%);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-soft);
+        padding: 24px 18px;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        font-size: 12px;
         font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(30px, 9vw, 58px);
         line-height: 1.02;
-        letter-spacing: -0.04em;
-        max-width: 16ch;
+        letter-spacing: -0.05em;
       }
 
       .hero-lead {
-        margin: 0 0 40px;
-        max-width: 56ch;
-        font-size: clamp(17px, 1.6vw, 20px);
-        color: var(--text-muted);
-        line-height: 1.5;
+        margin: 16px 0 0;
+        max-width: 50ch;
+        color: var(--muted);
+        font-size: clamp(15px, 3.5vw, 18px);
       }
 
-      .hero-cta {
+      .hero-actions {
+        margin-top: 22px;
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
-        align-items: center;
+        gap: 10px;
       }
 
       .btn {
+        appearance: none;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        min-height: 44px;
+        padding: 0 16px;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        cursor: pointer;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
-        padding: 14px 22px;
-        border-radius: 999px;
-        font: inherit;
-        font-size: 15px;
-        font-weight: 500;
-        letter-spacing: -0.005em;
-        cursor: pointer;
-        border: 1px solid transparent;
-        background: transparent;
-        color: var(--text);
-        transition:
-          background 120ms ease,
-          color 120ms ease,
-          border-color 120ms ease,
-          opacity 120ms ease;
       }
 
       .btn-primary {
-        background: var(--text);
+        background: var(--brand);
         color: #ffffff;
       }
 
-      .btn-primary:hover {
-        opacity: 0.85;
+      .btn-secondary {
+        background: #ffffff;
+        border-color: var(--line);
+        color: var(--brand-soft);
       }
 
-      .btn-link {
-        padding: 14px 0;
-        color: var(--text-muted);
+      .stats {
+        margin-top: 14px;
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
-      .btn-link:hover {
-        color: var(--text);
+      .stat {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.78);
+        border-radius: var(--radius-md);
+        padding: 12px;
       }
 
-      /* Sections */
-      section.section {
-        padding: 96px 0;
-        border-top: 1px solid var(--border);
+      .stat strong {
+        display: block;
+        font-size: 18px;
       }
 
-      .section-eyebrow {
-        margin: 0 0 16px;
+      .stat span {
+        color: var(--muted);
         font-size: 12px;
-        font-weight: 500;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--text-muted);
+      }
+
+      .section {
+        margin-top: 14px;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-card);
+        padding: 18px;
       }
 
       .section h2 {
-        margin: 0 0 24px;
-        font-size: clamp(28px, 4vw, 44px);
-        font-weight: 600;
-        letter-spacing: -0.03em;
+        margin: 4px 0 8px;
+        font-size: clamp(22px, 6.5vw, 36px);
         line-height: 1.1;
-        max-width: 22ch;
+        letter-spacing: -0.03em;
       }
 
-      .section-lead {
-        margin: 0 0 56px;
-        max-width: 56ch;
-        color: var(--text-muted);
+      .section p {
+        margin: 0;
+        color: var(--muted);
       }
 
-      /* Controls */
-      .controls {
+      .feature-grid {
+        margin-top: 14px;
         display: grid;
-        gap: 24px;
-        grid-template-columns: 1fr;
+        gap: 10px;
       }
 
-      @media (min-width: 720px) {
-        .controls {
-          grid-template-columns: repeat(3, 1fr);
-        }
+      .feature {
+        display: grid;
+        grid-template-columns: 40px 1fr;
+        gap: 10px;
+        align-items: start;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        background: #ffffff;
       }
 
-      .control {
-        border-top: 1px solid var(--border);
-        padding-top: 24px;
+      .feature-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: #eef2ff;
+        color: #4338ca;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
       }
 
-      .control-label {
-        display: block;
-        margin-bottom: 16px;
+      .feature h3 {
+        margin: 1px 0 4px;
+        font-size: 15px;
+      }
+
+      .feature p {
+        font-size: 13px;
+      }
+
+      .controls {
+        margin-top: 14px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .control-block {
+        border: 1px solid var(--line);
+        background: #ffffff;
+        border-radius: var(--radius-md);
+        padding: 12px;
+      }
+
+      .control-title {
+        margin: 0 0 8px;
         font-size: 12px;
-        font-weight: 500;
+        font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: var(--text-muted);
+        color: var(--muted);
       }
 
-      .control-row {
+      .chip-row {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
       }
 
       .chip {
-        padding: 8px 14px;
-        font-size: 14px;
-        font-weight: 500;
-        border-radius: 999px;
-        border: 1px solid var(--border);
-        background: transparent;
-        color: var(--text);
-        cursor: pointer;
-        font-family: inherit;
-        transition: border-color 120ms ease, background 120ms ease;
-      }
-
-      .chip:hover {
-        border-color: var(--border-strong);
-      }
-
-      /* Tap-through tiles */
-      .tiles {
-        display: grid;
-        gap: 1px;
-        background: var(--border);
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        overflow: hidden;
-        grid-template-columns: repeat(2, 1fr);
-      }
-
-      @media (min-width: 720px) {
-        .tiles {
-          grid-template-columns: repeat(4, 1fr);
-        }
-      }
-
-      .tile {
-        background: var(--bg);
-        border: 0;
-        padding: 32px 24px;
-        text-align: left;
-        font-family: inherit;
-        font-size: 15px;
-        font-weight: 500;
-        color: var(--text);
-        cursor: pointer;
-        transition: background 120ms ease;
-      }
-
-      .tile:hover {
-        background: #fafafa;
-      }
-
-      .tile-label {
-        display: block;
-        margin-top: 8px;
-        font-size: 12px;
-        font-weight: 500;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-      }
-
-      /* Footer */
-      footer.footer {
-        padding: 32px 0 64px;
-        border-top: 1px solid var(--border);
+        appearance: none;
+        font: inherit;
         font-size: 13px;
-        color: var(--text-muted);
+        font-weight: 600;
+        border: 1px solid var(--line-strong);
+        background: var(--surface-soft);
+        color: var(--brand-soft);
+        border-radius: 999px;
+        min-height: 36px;
+        padding: 0 12px;
+        cursor: pointer;
+      }
+
+      .cards {
+        margin-top: 14px;
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: #ffffff;
+        padding: 14px;
+      }
+
+      .card strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .card span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .card button {
+        margin-top: 10px;
+        width: 100%;
+      }
+
+      .footer {
+        margin-top: 14px;
+        padding: 12px 6px 0;
         display: flex;
         flex-wrap: wrap;
-        gap: 16px;
         justify-content: space-between;
-        align-items: center;
-      }
-
-      .footer .meta {
-        display: inline-flex;
-        gap: 12px;
-        align-items: center;
-      }
-
-      .footer code {
-        font-family: var(--mono);
+        gap: 10px;
+        color: var(--muted);
         font-size: 12px;
-        padding: 2px 8px;
-        border-radius: 999px;
-        border: 1px solid var(--border);
-        color: var(--text);
       }
 
-      /* Drawer styling — minimal, monochrome, generous spacing */
+      code {
+        border: 1px solid var(--line);
+        background: #ffffff;
+        border-radius: 999px;
+        padding: 3px 8px;
+      }
+
       smooth-drawer {
         --drawer-radius: 32px;
-        --drawer-content-padding-x: 28px;
+        --drawer-content-padding-x: 20px;
         --drawer-content-padding-top: 12px;
       }
 
       smooth-drawer h2 {
         margin: 0 0 4px;
         font-size: 22px;
-        font-weight: 600;
         letter-spacing: -0.02em;
       }
 
       .drawer-intro {
-        margin: 0 0 8px;
-        color: #737373;
+        margin: 0;
         font-size: 13px;
+        color: #64748b;
       }
 
       .demo-form {
         display: grid;
-        gap: 18px;
+        gap: 16px;
+        margin-top: 12px;
       }
 
       .form-grid {
         display: grid;
-        gap: 16px;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
       }
 
       smooth-drawer label {
         display: grid;
-        gap: 8px;
-        color: #0a0a0a;
+        gap: 6px;
         font-size: 13px;
-        font-weight: 500;
-        letter-spacing: 0.01em;
+        font-weight: 600;
+        color: #334155;
       }
 
       smooth-drawer input,
       smooth-drawer select,
       smooth-drawer textarea {
         appearance: none;
-        background: #fafafa;
+        background: #f8fafc;
         width: 100%;
-        border: 1px solid #ededed;
+        border: 1px solid #dbe1ea;
         border-radius: 12px;
         box-sizing: border-box;
-        color: #0a0a0a;
+        color: #0f172a;
         font: 400 16px/1.45 "Inter", ui-sans-serif, system-ui, sans-serif;
-        padding: 14px 16px;
+        padding: 13px 14px;
         transition: border-color 120ms ease, background 120ms ease;
       }
 
@@ -402,7 +417,7 @@
       smooth-drawer textarea:focus {
         outline: none;
         background: #ffffff;
-        border-color: #0a0a0a;
+        border-color: #3b82f6;
       }
 
       smooth-drawer input:-webkit-autofill,
@@ -411,10 +426,10 @@
       smooth-drawer input:-webkit-autofill:active,
       smooth-drawer textarea:-webkit-autofill,
       smooth-drawer select:-webkit-autofill {
-        -webkit-text-fill-color: #0a0a0a;
-        -webkit-box-shadow: 0 0 0 1000px #fafafa inset;
-        box-shadow: 0 0 0 1000px #fafafa inset;
-        caret-color: #0a0a0a;
+        -webkit-text-fill-color: #0f172a;
+        -webkit-box-shadow: 0 0 0 1000px #f8fafc inset;
+        box-shadow: 0 0 0 1000px #f8fafc inset;
+        caret-color: #0f172a;
         transition: background-color 9999s ease-out, color 9999s ease-out;
       }
 
@@ -430,151 +445,233 @@
         resize: vertical;
       }
 
-      .form-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        padding-top: 4px;
-      }
-
-      .form-actions button {
-        appearance: none;
-        font: inherit;
-        cursor: pointer;
-        font-size: 15px;
-        font-weight: 500;
-        padding: 12px 20px;
-        border-radius: 999px;
-        border: 1px solid transparent;
-      }
-
-      .form-actions button[type="submit"] {
-        background: #0a0a0a;
-        color: white;
-      }
-
-      .form-actions button[type="button"] {
-        background: white;
-        color: #0a0a0a;
-        border-color: #ededed;
-      }
-
+      .form-actions,
       .drawer-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 8px;
+        gap: 8px;
       }
 
+      .form-actions button,
       .drawer-actions button {
         appearance: none;
         font: inherit;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        padding: 10px 16px;
-        background: #fafafa;
-        color: #0a0a0a;
-        border: 1px solid #ededed;
         border-radius: 999px;
+        min-height: 38px;
+        padding: 0 14px;
+        cursor: pointer;
+        border: 1px solid #dbe1ea;
+        background: #ffffff;
+        color: #334155;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .form-actions button[type="submit"] {
+        background: #0f172a;
+        color: #ffffff;
+        border-color: transparent;
+      }
+
+      @media (min-width: 760px) {
+        .shell {
+          padding: 0 20px 120px;
+        }
+
+        .hero-card {
+          padding: 30px;
+        }
+
+        .stats {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .feature-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .controls {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .cards {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .form-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 14px;
+        }
       }
     </style>
   </head>
   <body>
     <header class="nav">
-      <div class="container nav-inner">
-        <a class="nav-brand" href="/">
-          <span class="nav-brand-mark" aria-hidden="true"></span>
+      <div class="nav-inner">
+        <a class="brand" href="/">
+          <span class="brand-badge" aria-hidden="true"></span>
           @despia/drawer
         </a>
         <nav class="nav-links" aria-label="Primary">
-          <a href="https://github.com/despia-native/despia-drawer" target="_blank" rel="noopener noreferrer">GitHub</a>
-          <a href="https://www.npmjs.com/package/@despia/drawer" target="_blank" rel="noopener noreferrer">npm</a>
-          <a href="https://setup.despia.com/introduction" target="_blank" rel="noopener noreferrer">Despia</a>
+          <a class="link-chip" href="https://github.com/despia-native/despia-drawer" target="_blank" rel="noreferrer">GitHub</a>
+          <a class="link-chip" href="https://www.npmjs.com/package/@despia/drawer" target="_blank" rel="noreferrer">npm</a>
+          <a class="link-chip" href="https://setup.despia.com/introduction" target="_blank" rel="noreferrer">Despia</a>
         </nav>
       </div>
     </header>
 
-    <main>
-      <section class="container hero">
-        <p class="hero-eyebrow">Open source · Web Component</p>
-        <h1>The bottom sheet that feels native.</h1>
-        <p class="hero-lead">
-          Native CSS scroll-snap. Compositor-driven. Works in React, Vue, Svelte, Angular and plain HTML.
+    <main class="shell">
+      <section class="hero">
+        <article class="hero-card">
+          <p class="eyebrow">Open source · native feel</p>
+          <h1>Bottom sheet motion that feels iOS-smooth.</h1>
+          <p class="hero-lead">
+            Built on native scroll-snap and compositor scrolling. Works in React, Vue, Svelte, Angular, or plain HTML
+            while staying fast and predictable on mobile.
+          </p>
+          <div class="hero-actions">
+            <button type="button" class="btn btn-primary" data-open="large">Open drawer</button>
+            <button type="button" class="btn btn-secondary" data-open="peek">Peek detent</button>
+            <button type="button" class="btn btn-secondary" data-close>Close</button>
+          </div>
+          <div class="stats">
+            <div class="stat">
+              <strong>60fps</strong>
+              <span>Compositor first</span>
+            </div>
+            <div class="stat">
+              <strong>5 modes</strong>
+              <span>Detents + snap control</span>
+            </div>
+            <div class="stat">
+              <strong>1 component</strong>
+              <span>Cross-framework API</span>
+            </div>
+            <div class="stat">
+              <strong>100%</strong>
+              <span>Mobile responsive demo</span>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="section">
+        <p class="eyebrow">Highlights</p>
+        <h2>Minimal shell. Real behavior.</h2>
+        <p>
+          This demo focuses on the production details: keyboard-safe form focus, smooth inner scrolling, and predictable
+          layering when drawers stack.
         </p>
-        <div class="hero-cta">
-          <button type="button" class="btn btn-primary" data-open="large">Open the drawer</button>
-          <button type="button" class="btn btn-link" data-open="peek">Peek →</button>
+        <div class="feature-grid">
+          <article class="feature">
+            <span class="feature-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M6 12h12M12 6l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
+            <div>
+              <h3>Native momentum</h3>
+              <p>Scroll physics come from the browser, not JS transform loops.</p>
+            </div>
+          </article>
+          <article class="feature">
+            <span class="feature-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
+                <path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </span>
+            <div>
+              <h3>Safe keyboard UX</h3>
+              <p>Keyboard inputs get guard rails without breaking date/file/select controls.</p>
+            </div>
+          </article>
+          <article class="feature">
+            <span class="feature-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M5 8h14M5 12h14M5 16h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </span>
+            <div>
+              <h3>Layered stack support</h3>
+              <p>New drawer opens on top; previous drawer stays locked behind it.</p>
+            </div>
+          </article>
+          <article class="feature">
+            <span class="feature-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M7 17h10M8 7l4-3 4 3v8a4 4 0 1 1-8 0V7Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
+            <div>
+              <h3>Despia-ready</h3>
+              <p>Same component runs in browser, and can integrate deeper in Despia Native.</p>
+            </div>
+          </article>
         </div>
       </section>
 
-      <section class="container section">
-        <p class="section-eyebrow">Try it</p>
-        <h2>Drag, snap, and tap through.</h2>
-        <p class="section-lead">
-          Open any detent, switch the snap behavior, or toggle the theme. Then tap a tile below — the click reaches
-          straight through the sheet.
-        </p>
-
+      <section class="section">
+        <p class="eyebrow">Controls</p>
+        <h2>Try every state quickly.</h2>
+        <p>Use these controls to validate detents, mode, theme, and click-through behavior on any screen size.</p>
         <div class="controls">
-          <div class="control">
-            <span class="control-label">Detents</span>
-            <div class="control-row">
-              <button type="button" class="chip" data-open="peek">Peek</button>
-              <button type="button" class="chip" data-open="medium">Medium</button>
-              <button type="button" class="chip" data-open="large">Large</button>
-              <button type="button" class="chip" data-close>Close</button>
+          <article class="control-block">
+            <p class="control-title">Detents</p>
+            <div class="chip-row">
+              <button class="chip" type="button" data-open="peek">Peek</button>
+              <button class="chip" type="button" data-open="medium">Medium</button>
+              <button class="chip" type="button" data-open="large">Large</button>
+              <button class="chip" type="button" data-close>Close</button>
             </div>
-          </div>
-          <div class="control">
-            <span class="control-label">Appearance</span>
-            <div class="control-row">
-              <button type="button" class="chip" data-theme>Theme</button>
+          </article>
+          <article class="control-block">
+            <p class="control-title">Behavior</p>
+            <div class="chip-row">
+              <button class="chip" type="button" data-mode>Toggle snap mode</button>
+              <button class="chip" type="button" data-theme>Toggle theme</button>
             </div>
-          </div>
-          <div class="control">
-            <span class="control-label">Snap</span>
-            <div class="control-row">
-              <button type="button" class="chip" data-mode>Mode</button>
+          </article>
+          <article class="control-block">
+            <p class="control-title">Sheet API</p>
+            <div class="chip-row">
+              <button class="chip" type="button" data-next>Next detent</button>
+              <button class="chip" type="button" data-prev>Previous detent</button>
             </div>
-          </div>
+          </article>
+        </div>
+        <div class="cards">
+          <article class="card">
+            <strong>Orders</strong>
+            <span>Tap-through tile test</span>
+            <button type="button" class="chip" onclick="alert('Orders tile reached!')">Tap</button>
+          </article>
+          <article class="card">
+            <strong>Wallet</strong>
+            <span>Tap-through tile test</span>
+            <button type="button" class="chip" onclick="alert('Wallet tile reached!')">Tap</button>
+          </article>
+          <article class="card">
+            <strong>Messages</strong>
+            <span>Tap-through tile test</span>
+            <button type="button" class="chip" onclick="alert('Messages tile reached!')">Tap</button>
+          </article>
+          <article class="card">
+            <strong>Settings</strong>
+            <span>Tap-through tile test</span>
+            <button type="button" class="chip" onclick="alert('Settings tile reached!')">Tap</button>
+          </article>
         </div>
       </section>
 
-      <section class="container section">
-        <p class="section-eyebrow">Tap-through</p>
-        <h2>The page stays interactive.</h2>
-        <p class="section-lead">
-          With the sheet at peek or medium, clip-path keeps the area above the drawer fully tappable.
-        </p>
-        <div class="tiles">
-          <button type="button" class="tile" onclick="alert('Background click reached Maps')">
-            Maps
-            <span class="tile-label">Reachable</span>
-          </button>
-          <button type="button" class="tile" onclick="alert('Background click reached Messages')">
-            Messages
-            <span class="tile-label">Reachable</span>
-          </button>
-          <button type="button" class="tile" onclick="alert('Background click reached Music')">
-            Music
-            <span class="tile-label">Reachable</span>
-          </button>
-          <button type="button" class="tile" onclick="alert('Background click reached Wallet')">
-            Wallet
-            <span class="tile-label">Reachable</span>
-          </button>
-        </div>
-      </section>
+      <footer class="footer">
+        <span>Despia Drawer demo · MIT</span>
+        <span>
+          <code id="version-label">v0.0.10</code>
+          <a href="https://setup.despia.com" target="_blank" rel="noreferrer">Built for Despia Native</a>
+        </span>
+      </footer>
     </main>
-
-    <footer class="container footer">
-      <span>© Despia · MIT licensed</span>
-      <span class="meta">
-        <code id="version-label">v0.0.9</code>
-        <a href="https://setup.despia.com" target="_blank" rel="noopener noreferrer">Built for Despia Native</a>
-      </span>
-    </footer>
 
     <smooth-drawer
       id="drawer"
@@ -587,7 +684,7 @@
       smart-keyboard
     >
       <h2>Account details</h2>
-      <p id="state" class="drawer-intro">Waiting for state…</p>
+      <p id="state" class="drawer-intro">Waiting for state...</p>
       <form class="demo-form">
         <div class="form-grid">
           <label>
@@ -625,6 +722,10 @@
           <label>
             Time
             <input type="time" />
+          </label>
+          <label>
+            Upload
+            <input type="file" />
           </label>
           <label>
             Plan
@@ -670,8 +771,10 @@
       document.querySelectorAll('[data-close]').forEach((button) => {
         button.addEventListener('click', () => drawer.hide());
       });
+
       document.querySelector('[data-next]').addEventListener('click', () => drawer.next());
       document.querySelector('[data-prev]').addEventListener('click', () => drawer.previous());
+
       document.querySelector('.demo-form').addEventListener('submit', (event) => {
         event.preventDefault();
         state.textContent = 'Saved without leaving the page.';

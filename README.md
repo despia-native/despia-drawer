@@ -40,7 +40,8 @@ Demo: [open the GitHub Pages preview](https://despia-native.github.io/despia-dra
 </smooth-drawer>
 ```
 
-Multiple drawers on the same page are supported. Target the instance you want by `id`, class, or any selector:
+Multiple drawers on the same page are supported. Target the instance you want by `id`, class, or any selector.
+When a second drawer opens, it is layered above the previously open drawer, and the older one stays locked behind it until the top drawer closes:
 
 ```html
 <button onclick="document.getElementById('cartDrawer').show('large')">
