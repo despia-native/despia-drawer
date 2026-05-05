@@ -934,8 +934,16 @@ export class SmoothDrawer extends HTMLElement {
       if (settled.name === 'closed') {
         this._markClosedInStack();
         this._deactivateOpenGuards();
+        this._resetContentScroll();
       }
     }, 120);
+  }
+
+  private _resetContentScroll(): void {
+    this._clearContentAutoScroll();
+    if (this._content.scrollTop !== 0) {
+      this._content.scrollTo({ top: 0, behavior: 'auto' });
+    }
   }
 
   private _onClosedClick(): void {
