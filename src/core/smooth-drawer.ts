@@ -123,8 +123,8 @@ export class SmoothDrawer extends HTMLElement {
   private _viewportGuardScrollY = 0;
   private _viewportGuardRestoreTimers: ReturnType<typeof setTimeout>[] = [];
   private _contentAutoScrollTimers: ReturnType<typeof setTimeout>[] = [];
-  private _lastContentAutoScrollAt = 0;
-  private _lastContentAutoScrollTop = 0;
+  private _autoScrollLockTimer: ReturnType<typeof setTimeout> | null = null;
+  private _isAutoScrolling = false;
   private _pageScrollLock: PageScrollLockSnapshot | null = null;
   private _pendingFocusGuardTimer: ReturnType<typeof setTimeout> | null = null;
   private _focusedTextInput: HTMLElement | null = null;
@@ -371,7 +371,6 @@ export class SmoothDrawer extends HTMLElement {
     this._onGuardScroll = this._onGuardScroll.bind(this);
     this._onPotentialInputFocus = this._onPotentialInputFocus.bind(this);
     this._clearContentAutoScroll = this._clearContentAutoScroll.bind(this);
-    this._syncPageScrollLockHeight = this._syncPageScrollLockHeight.bind(this);
     this._onResizeCheck = this._onResizeCheck.bind(this);
 
     this._resizeObserver = new ResizeObserver(this._onResizeCheck);
@@ -717,7 +716,6 @@ export class SmoothDrawer extends HTMLElement {
   private _onGuardViewportResize(): void {
     if (!this._viewportGuardActive || !window.visualViewport) return;
     if (this._focusedTextInput && window.visualViewport.height < window.innerHeight) {
-      this._syncPageScrollLockHeight();
       this._restoreViewportScroll();
       this._queueViewportScrollRestores();
     }
@@ -754,17 +752,7 @@ export class SmoothDrawer extends HTMLElement {
 
     const html = document.documentElement;
     const body = document.body;
-    const properties = [
-      'height',
-      'overflow',
-      'overscroll-behavior',
-      '-webkit-overflow-scrolling',
-      'position',
-      'top',
-      'left',
-      'right',
-      'width'
-    ];
+    const properties = ['overflow', 'overscroll-behavior'];
     const snapshot: PageScrollLockSnapshot = {
       scrollY: this._viewportGuardScrollY,
       html: {},
@@ -777,27 +765,10 @@ export class SmoothDrawer extends HTMLElement {
     }
 
     this._pageScrollLock = snapshot;
-    window.addEventListener('resize', this._syncPageScrollLockHeight);
-    this._syncPageScrollLockHeight();
     html.style.setProperty('overflow', 'hidden');
     html.style.setProperty('overscroll-behavior', 'none');
-    html.style.setProperty('-webkit-overflow-scrolling', 'auto');
-
     body.style.setProperty('overflow', 'hidden');
     body.style.setProperty('overscroll-behavior', 'none');
-    body.style.setProperty('-webkit-overflow-scrolling', 'auto');
-    body.style.setProperty('position', 'fixed');
-    body.style.setProperty('top', `${-this._viewportGuardScrollY}px`);
-    body.style.setProperty('left', '0');
-    body.style.setProperty('right', '0');
-    body.style.setProperty('width', '100%');
-  }
-
-  private _syncPageScrollLockHeight(): void {
-    if (!this._pageScrollLock) return;
-    const height = `${Math.max(0, window.innerHeight - 1)}px`;
-    document.documentElement.style.setProperty('height', height);
-    document.body.style.setProperty('height', height);
   }
 
   private _unlockPageScrollForFocusedInput(): void {
@@ -805,7 +776,6 @@ export class SmoothDrawer extends HTMLElement {
     if (!snapshot) return;
 
     this._pageScrollLock = null;
-    window.removeEventListener('resize', this._syncPageScrollLockHeight);
     const html = document.documentElement;
     const body = document.body;
     for (const [property, value] of Object.entries(snapshot.html)) {
@@ -816,7 +786,6 @@ export class SmoothDrawer extends HTMLElement {
       if (value) body.style.setProperty(property, value);
       else body.style.removeProperty(property);
     }
-    window.scrollTo(0, snapshot.scrollY);
   }
 
   private _emit(eventName: DrawerEventName, extraDetail: Partial<DrawerEventDetail> = {}): void {
@@ -1125,14 +1094,12 @@ export class SmoothDrawer extends HTMLElement {
       this._syncKeyboardPadding();
       this._scrollFocusedInputIntoDrawerView();
     });
-    setTimeout(() => {
-      this._syncKeyboardPadding();
-      this._scrollFocusedInputIntoDrawerView();
-    }, 120);
-    setTimeout(() => {
-      this._syncKeyboardPadding();
-      this._scrollFocusedInputIntoDrawerView();
-    }, 320);
+    this._contentAutoScrollTimers.push(
+      setTimeout(() => {
+        this._syncKeyboardPadding();
+        this._scrollFocusedInputIntoDrawerView();
+      }, 320)
+    );
   }
 
   private _onFocusOut(): void {
@@ -1193,12 +1160,17 @@ export class SmoothDrawer extends HTMLElement {
   private _clearContentAutoScroll(): void {
     for (const timer of this._contentAutoScrollTimers) clearTimeout(timer);
     this._contentAutoScrollTimers = [];
-    this._lastContentAutoScrollAt = 0;
-    this._lastContentAutoScrollTop = this._content.scrollTop;
+    if (this._autoScrollLockTimer !== null) {
+      clearTimeout(this._autoScrollLockTimer);
+      this._autoScrollLockTimer = null;
+    }
+    this._isAutoScrolling = false;
   }
 
   private _scrollInputIntoDrawerView(input: HTMLElement): void {
     if (!input.isConnected) return;
+    if (this._isAutoScrolling) return;
+
     const inputRect = input.getBoundingClientRect();
     const contentRect = this._content.getBoundingClientRect();
     const viewport = window.visualViewport;
@@ -1221,33 +1193,24 @@ export class SmoothDrawer extends HTMLElement {
 
     const maxScrollTop = Math.max(0, this._content.scrollHeight - this._content.clientHeight);
     targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
-    if (Math.abs(targetScrollTop - this._content.scrollTop) < 2) return;
+    if (Math.abs(targetScrollTop - this._content.scrollTop) < 4) return;
 
-    const now = performance.now();
-    const recentlyAutoScrolled = now - this._lastContentAutoScrollAt < 180;
-    const closeToLastTarget = Math.abs(targetScrollTop - this._lastContentAutoScrollTop) < 24;
-    if (recentlyAutoScrolled && closeToLastTarget) return;
-
-    const behavior: ScrollBehavior = recentlyAutoScrolled ? 'auto' : 'smooth';
+    this._isAutoScrolling = true;
     this._content.scrollTo({
       top: targetScrollTop,
-      behavior
+      behavior: 'smooth'
     });
-    this._lastContentAutoScrollAt = now;
-    this._lastContentAutoScrollTop = targetScrollTop;
+    if (this._autoScrollLockTimer !== null) clearTimeout(this._autoScrollLockTimer);
+    this._autoScrollLockTimer = setTimeout(() => {
+      this._isAutoScrolling = false;
+      this._autoScrollLockTimer = null;
+    }, 380);
   }
 
   private _scrollFocusedInputIntoDrawerView(): void {
     const input = this._focusedTextInput;
     if (!input) return;
-    this._clearContentAutoScroll();
     requestAnimationFrame(() => this._scrollInputIntoDrawerView(input));
-    this._contentAutoScrollTimers.push(
-      setTimeout(() => this._scrollInputIntoDrawerView(input), 80),
-      setTimeout(() => this._scrollInputIntoDrawerView(input), 180),
-      setTimeout(() => this._scrollInputIntoDrawerView(input), 360),
-      setTimeout(() => this._scrollInputIntoDrawerView(input), 520)
-    );
   }
 
   private _largestKeyboardDetent(): DrawerDetent | null {

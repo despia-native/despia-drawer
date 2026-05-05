@@ -1,6 +1,6 @@
 {
   "name": "@despia/drawer",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "iOS-style bottom-sheet drawer. Native CSS scroll-snap. Universal, React, Vue, Svelte, Angular, vanilla JS.",
   "license": "MIT",
   "type": "module",
