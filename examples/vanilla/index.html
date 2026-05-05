@@ -68,14 +68,34 @@
         --drawer-radius: 56px;
       }
 
+      .drawer-intro {
+        margin: 0;
+      }
+
+      .demo-form {
+        display: grid;
+        gap: 14px;
+      }
+
+      .form-grid {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
       smooth-drawer label {
         display: grid;
         gap: 8px;
+        color: #111827;
+        font-size: 14px;
         font-weight: 700;
       }
 
       smooth-drawer input,
+      smooth-drawer select,
       smooth-drawer textarea {
+        appearance: none;
+        background: #ffffff;
         width: 100%;
         border: 1px solid #d1d5db;
         border-radius: 14px;
@@ -85,9 +105,29 @@
         padding: 12px 14px;
       }
 
+      smooth-drawer input:focus,
+      smooth-drawer select:focus,
+      smooth-drawer textarea:focus {
+        border-color: #111827;
+        outline: 3px solid rgba(17, 24, 39, 0.12);
+      }
+
       smooth-drawer textarea {
         min-height: 96px;
         resize: vertical;
+      }
+
+      .form-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding-top: 4px;
+      }
+
+      .form-actions button[type="button"] {
+        background: white;
+        color: #111827;
+        box-shadow: inset 0 0 0 1px #d1d5db;
       }
     </style>
   </head>
@@ -122,18 +162,75 @@
       backdrop="from:large"
       snap-mode="momentum"
       theme="auto"
+      hide-scrollbar
       smart-keyboard
     >
-      <h2>Hello drawer</h2>
-      <p id="state">Waiting for state...</p>
-      <label>
-        Try smart keyboard:
-        <input placeholder="Focus me on iOS" />
-      </label>
-      <label>
-        Textarea:
-        <textarea placeholder="Focus me too" rows="4"></textarea>
-      </label>
+      <h2>Large form test</h2>
+      <p id="state" class="drawer-intro">Waiting for state...</p>
+      <form class="demo-form">
+        <div class="form-grid">
+          <label>
+            Full name
+            <input type="text" autocomplete="name" placeholder="Yacine Nedjar" />
+          </label>
+          <label>
+            Email
+            <input type="email" autocomplete="email" placeholder="you@example.com" />
+          </label>
+          <label>
+            Phone
+            <input type="tel" autocomplete="tel" placeholder="+971 50 123 4567" />
+          </label>
+          <label>
+            Company
+            <input type="text" autocomplete="organization" placeholder="Despia" />
+          </label>
+          <label>
+            Website
+            <input type="url" inputmode="url" placeholder="https://example.com" />
+          </label>
+          <label>
+            Password
+            <input type="password" autocomplete="new-password" placeholder="Minimum 8 characters" />
+          </label>
+          <label>
+            Guests
+            <input type="number" inputmode="numeric" min="1" max="12" value="2" />
+          </label>
+          <label>
+            Date
+            <input type="date" />
+          </label>
+          <label>
+            Time
+            <input type="time" />
+          </label>
+          <label>
+            Plan
+            <select>
+              <option>Starter</option>
+              <option>Pro</option>
+              <option>Business</option>
+            </select>
+          </label>
+          <label>
+            Address
+            <input type="text" autocomplete="street-address" placeholder="Street and building" />
+          </label>
+          <label>
+            City
+            <input type="text" autocomplete="address-level2" placeholder="Dubai" />
+          </label>
+          <label>
+            Notes
+            <textarea placeholder="Long notes should scroll inside the drawer, not the page." rows="5"></textarea>
+          </label>
+        </div>
+        <div class="form-actions">
+          <button type="submit">Submit form</button>
+          <button type="button" data-close>Cancel</button>
+        </div>
+      </form>
       <div class="drawer-actions">
         <button data-next>Next</button>
         <button data-prev>Previous</button>
@@ -149,9 +246,15 @@
       document.querySelectorAll('[data-open]').forEach((button) => {
         button.addEventListener('click', () => drawer.show(button.dataset.open));
       });
-      document.querySelector('[data-close]').addEventListener('click', () => drawer.hide());
+      document.querySelectorAll('[data-close]').forEach((button) => {
+        button.addEventListener('click', () => drawer.hide());
+      });
       document.querySelector('[data-next]').addEventListener('click', () => drawer.next());
       document.querySelector('[data-prev]').addEventListener('click', () => drawer.previous());
+      document.querySelector('.demo-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        state.textContent = 'Form submitted without leaving the page.';
+      });
 
       document.querySelector('[data-theme]').addEventListener('click', () => {
         drawer.setAttribute('theme', drawer.getAttribute('theme') === 'dark' ? 'light' : 'dark');
