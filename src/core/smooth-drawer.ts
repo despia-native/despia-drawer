@@ -95,6 +95,7 @@ export class SmoothDrawer extends HTMLElement {
   private _handleArea!: HTMLDivElement;
   private _content!: HTMLDivElement;
   private _keyboardSpacer!: HTMLDivElement;
+  private _hapticSwitchLabel!: HTMLLabelElement;
 
   private _detents: DrawerDetent[] = [];
   private _detentsRaw: RawDetent[] = [];
@@ -334,6 +335,28 @@ export class SmoothDrawer extends HTMLElement {
           flex-shrink: 0;
           height: 0;
         }
+
+        .haptic-switch {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          margin: -1px;
+          padding: 0;
+          border: 0;
+          overflow: hidden;
+          clip: rect(0 0 0 0);
+          opacity: 0;
+          pointer-events: none;
+          z-index: -1;
+        }
+
+        .haptic-switch input {
+          width: 1px;
+          height: 1px;
+          margin: 0;
+          padding: 0;
+          border: 0;
+        }
       </style>
 
       <div class="backdrop" part="backdrop"></div>
@@ -349,6 +372,9 @@ export class SmoothDrawer extends HTMLElement {
           </div>
         </div>
       </div>
+      <label class="haptic-switch" part="haptic-switch" aria-hidden="true">
+        <input type="checkbox" switch tabindex="-1" />
+      </label>
     `;
 
     this._track = this.shadowRoot!.querySelector('.track') as HTMLDivElement;
@@ -358,6 +384,7 @@ export class SmoothDrawer extends HTMLElement {
     this._handleArea = this.shadowRoot!.querySelector('.handle-area') as HTMLDivElement;
     this._content = this.shadowRoot!.querySelector('.content') as HTMLDivElement;
     this._keyboardSpacer = this.shadowRoot!.querySelector('.keyboard-spacer') as HTMLDivElement;
+    this._hapticSwitchLabel = this.shadowRoot!.querySelector('.haptic-switch') as HTMLLabelElement;
 
     this._onScroll = this._onScroll.bind(this);
     this._onClosedClick = this._onClosedClick.bind(this);
@@ -644,8 +671,28 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _haptic(mode: 'light' | 'heavy'): void {
-    if (!this._isDespiaRuntime()) return;
-    this._openBridge(mode === 'heavy' ? 'heavyhaptic://' : 'lighthaptic://');
+    this._triggerIosHapticSwitch();
+    this._triggerVibration(mode);
+  }
+
+  private _triggerIosHapticSwitch(): void {
+    const label = this._hapticSwitchLabel;
+    if (!label) return;
+    try {
+      label.click();
+    } catch {
+      // iOS 17.4+ Safari/PWA toggles the hidden switch which fires a subtle haptic.
+      // Older iOS and other engines silently ignore this and fall back to vibration.
+    }
+  }
+
+  private _triggerVibration(mode: 'light' | 'heavy'): void {
+    if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+    try {
+      navigator.vibrate(mode === 'heavy' ? 18 : 8);
+    } catch {
+      // Vibration API throws in cross-origin or background contexts; safe to ignore.
+    }
   }
 
   private _isDespiaRuntime(): boolean {
