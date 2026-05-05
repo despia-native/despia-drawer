@@ -1142,16 +1142,11 @@ export class SmoothDrawer extends HTMLElement {
       this._deactivateOpenGuards();
 
       if (!this.hasAttribute('smart-keyboard')) return;
-      const previous = this._smartKeyboard.previousDetent;
-      const shouldRestoreDetent = !this._skipKeyboardRestore;
       this._skipKeyboardRestore = false;
       this._smartKeyboard.previousDetent = null;
       this._smartKeyboard.keyboardHeight = 0;
       this.classList.remove('keyboard-active');
       this._setContentPadding('');
-      if (shouldRestoreDetent && previous && previous !== this.detent) {
-        this.snapTo(previous, { trigger: 'keyboard' });
-      }
     }, 120);
   }
 
