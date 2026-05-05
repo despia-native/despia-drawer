@@ -752,9 +752,21 @@ export class SmoothDrawer extends HTMLElement {
 
     const html = document.documentElement;
     const body = document.body;
-    const properties = ['overflow', 'overscroll-behavior'];
+    const scrollY = this._viewportGuardScrollY;
+    const scrollHeight = Math.max(html.scrollHeight, window.innerHeight + 1);
+    const properties = [
+      'height',
+      'min-height',
+      'overflow',
+      'overscroll-behavior',
+      'position',
+      'top',
+      'left',
+      'right',
+      'width'
+    ];
     const snapshot: PageScrollLockSnapshot = {
-      scrollY: this._viewportGuardScrollY,
+      scrollY,
       html: {},
       body: {}
     };
@@ -765,10 +777,21 @@ export class SmoothDrawer extends HTMLElement {
     }
 
     this._pageScrollLock = snapshot;
+
+    // Pretend the document is still scrollable so iOS keeps the URL bar in its current state
+    // while we freeze the body in place with position:fixed.
+    html.style.setProperty('height', `${scrollHeight}px`);
+    html.style.setProperty('min-height', `${scrollHeight}px`);
     html.style.setProperty('overflow', 'hidden');
     html.style.setProperty('overscroll-behavior', 'none');
+
     body.style.setProperty('overflow', 'hidden');
     body.style.setProperty('overscroll-behavior', 'none');
+    body.style.setProperty('position', 'fixed');
+    body.style.setProperty('top', `${-scrollY}px`);
+    body.style.setProperty('left', '0');
+    body.style.setProperty('right', '0');
+    body.style.setProperty('width', '100%');
   }
 
   private _unlockPageScrollForFocusedInput(): void {
@@ -786,6 +809,7 @@ export class SmoothDrawer extends HTMLElement {
       if (value) body.style.setProperty(property, value);
       else body.style.removeProperty(property);
     }
+    window.scrollTo(0, snapshot.scrollY);
   }
 
   private _emit(eventName: DrawerEventName, extraDetail: Partial<DrawerEventDetail> = {}): void {
