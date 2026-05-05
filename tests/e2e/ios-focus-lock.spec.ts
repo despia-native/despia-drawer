@@ -12,3 +12,13 @@ test('drawer input focus keeps host page scroll anchored', async ({ page }) => {
   const after = await page.evaluate(() => window.scrollY);
   expect(Math.abs(after - before)).toBeLessThanOrEqual(2);
 });
+
+test('second drawer stacks above the first drawer', async ({ page }) => {
+  await page.goto('/examples/vanilla/');
+
+  await page.locator('[data-open="large"]').first().click();
+  await page.locator('[data-open-secondary]').click();
+
+  await expect(page.locator('#drawer')).toHaveClass(/stacked-behind/);
+  await expect(page.locator('#secondaryDrawer')).not.toHaveClass(/stacked-behind/);
+});

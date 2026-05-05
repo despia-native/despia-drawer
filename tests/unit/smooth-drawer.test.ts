@@ -93,4 +93,71 @@ describe('smooth-drawer', () => {
 
     expect(events).toBeLessThanOrEqual(1);
   });
+
+  it('uses unique hidden haptic switch ids for multiple drawers', async () => {
+    const first = await createDrawer();
+    const second = await createDrawer();
+
+    const firstInput = first.shadowRoot?.querySelector<HTMLInputElement>('.haptic-switch input');
+    const secondInput = second.shadowRoot?.querySelector<HTMLInputElement>('.haptic-switch input');
+    const firstLabel = first.shadowRoot?.querySelector<HTMLLabelElement>('.haptic-switch');
+
+    expect(firstInput?.id).toBeTruthy();
+    expect(secondInput?.id).toBeTruthy();
+    expect(firstInput?.id).not.toBe(secondInput?.id);
+    expect(firstLabel?.htmlFor).toBe(firstInput?.id);
+  });
+
+  it('normalizes viewport meta without duplicating interactive-widget', async () => {
+    document.head.innerHTML = '<meta name="viewport" content="width=device-width, interactive-widget=overlays-content, viewport-fit=cover">';
+
+    await createDrawer({ 'smart-keyboard': '' });
+
+    const viewport = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    expect(viewport?.content).toBe('width=device-width, viewport-fit=cover, interactive-widget=resizes-content');
+  });
+
+  it('restores inert siblings after a fully-open drawer closes', async () => {
+    const sibling = document.createElement('main');
+    document.body.appendChild(sibling);
+    const drawer = await createDrawer({ detents: 'closed:0, large:100px' });
+
+    drawer.show('large', { animate: false });
+    await tick();
+    vi.advanceTimersByTime(130);
+
+    expect((sibling as HTMLElement & { inert?: boolean }).inert).toBe(true);
+    expect(sibling.getAttribute('aria-hidden')).toBe('true');
+
+    drawer.hide({ animate: false });
+    await tick();
+    vi.advanceTimersByTime(130);
+
+    expect((sibling as HTMLElement & { inert?: boolean }).inert).toBe(false);
+    expect(sibling.hasAttribute('aria-hidden')).toBe(false);
+  });
+
+  it('preserves user-provided aria-labelledby when no drawer title is present', async () => {
+    const drawer = await createDrawer({ detents: 'closed:0, large:80vh', 'aria-labelledby': 'external-title' });
+
+    drawer.show('large', { animate: false });
+    await tick();
+    drawer.hide({ animate: false });
+    await tick();
+    vi.advanceTimersByTime(130);
+
+    expect(drawer.getAttribute('aria-labelledby')).toBe('external-title');
+  });
+
+  it('clamps downward dismissal scroll when dismissable is false', async () => {
+    const drawer = await createDrawer({ detents: 'closed:0, medium:50px, large:100px', dismissable: 'false' });
+    const track = drawer.shadowRoot?.querySelector('.track') as HTMLDivElement;
+
+    drawer.show('medium', { animate: false });
+    await tick();
+    track.scrollTop = 1;
+    track.dispatchEvent(new Event('scroll'));
+
+    expect(track.scrollTop).toBe(50);
+  });
 });

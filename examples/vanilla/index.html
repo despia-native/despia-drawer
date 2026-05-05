@@ -2,15 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta
       name="description"
-      content="@despia/drawer demo - native-feeling iOS-style bottom sheet with clean mobile-first UI."
+      content="@despia/drawer demo - minimal iOS-style bottom sheet with native-feeling behavior."
     />
     <title>@despia/drawer - Demo</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
       *,
       *::before,
@@ -19,20 +16,16 @@
       }
 
       :root {
-        --bg: #f5f7fb;
-        --surface: #ffffff;
-        --surface-soft: #f8fafc;
-        --text: #0f172a;
-        --muted: #64748b;
-        --line: #e2e8f0;
-        --line-strong: #cbd5e1;
-        --brand: #0f172a;
-        --brand-soft: #334155;
-        --radius-xl: 28px;
-        --radius-lg: 20px;
-        --radius-md: 14px;
-        --shadow-soft: 0 10px 30px rgba(15, 23, 42, 0.08);
-        --shadow-card: 0 12px 36px rgba(15, 23, 42, 0.08);
+        color-scheme: light;
+        --bg: #ffffff;
+        --text: #1d1d1f;
+        --muted: #6e6e73;
+        --muted-2: #86868b;
+        --line: #d2d2d7;
+        --line-soft: #e8e8ed;
+        --fill: #f5f5f7;
+        --blue: #0066cc;
+        --radius: 18px;
       }
 
       html {
@@ -43,381 +36,329 @@
       body {
         margin: 0;
         min-height: 100dvh;
-        background:
-          radial-gradient(circle at 0% 0%, #e2e8f0 0%, transparent 35%),
-          radial-gradient(circle at 100% 0%, #dbeafe 0%, transparent 30%),
-          var(--bg);
+        background: var(--bg);
         color: var(--text);
-        font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-        line-height: 1.45;
+        font: 400 17px/1.47 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
       }
 
       a {
-        color: inherit;
+        color: var(--blue);
         text-decoration: none;
       }
 
-      .shell {
-        width: min(100%, 1080px);
-        margin: 0 auto;
-        padding: 0 16px 100px;
+      a:hover {
+        text-decoration: underline;
       }
 
       .nav {
         position: sticky;
         top: 0;
         z-index: 20;
-        backdrop-filter: blur(12px) saturate(180%);
-        -webkit-backdrop-filter: blur(12px) saturate(180%);
-        background: rgba(245, 247, 251, 0.72);
-        border-bottom: 1px solid rgba(203, 213, 225, 0.6);
+        background: rgba(255, 255, 255, 0.82);
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
       }
 
       .nav-inner {
-        width: min(100%, 1080px);
+        width: min(100%, 980px);
+        height: 52px;
         margin: 0 auto;
-        height: 64px;
-        padding: 0 16px;
+        padding: 0 22px;
         display: flex;
         align-items: center;
         justify-content: space-between;
+        gap: 18px;
       }
 
       .brand {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-      }
-
-      .brand-badge {
-        width: 28px;
-        height: 28px;
-        border-radius: 9px;
-        background: linear-gradient(140deg, #0f172a, #334155);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        color: var(--text);
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
       }
 
       .nav-links {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
+        display: flex;
+        gap: 18px;
+        font-size: 13px;
+        white-space: nowrap;
       }
 
-      .link-chip {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 36px;
-        padding: 0 12px;
-        border-radius: 999px;
-        border: 1px solid var(--line);
-        color: var(--muted);
-        background: rgba(255, 255, 255, 0.72);
-        font-size: 13px;
-        font-weight: 600;
+      .shell {
+        width: min(100%, 980px);
+        margin: 0 auto;
+        padding: 72px 22px 120px;
       }
 
       .hero {
-        padding: 30px 0 20px;
-      }
-
-      .hero-card {
-        background: linear-gradient(160deg, #ffffff 0%, #f8fafc 100%);
-        border: 1px solid var(--line);
-        border-radius: var(--radius-xl);
-        box-shadow: var(--shadow-soft);
-        padding: 24px 18px;
+        max-width: 760px;
+        padding-bottom: 52px;
+        border-bottom: 1px solid var(--line-soft);
       }
 
       .eyebrow {
-        margin: 0 0 10px;
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
+        margin: 0 0 14px;
         color: var(--muted);
+        font-size: 14px;
+        font-weight: 600;
       }
 
       h1 {
         margin: 0;
-        font-size: clamp(30px, 9vw, 58px);
-        line-height: 1.02;
-        letter-spacing: -0.05em;
+        max-width: 720px;
+        font-size: clamp(44px, 8vw, 82px);
+        line-height: 0.98;
+        letter-spacing: -0.06em;
+        font-weight: 700;
       }
 
-      .hero-lead {
-        margin: 16px 0 0;
-        max-width: 50ch;
+      .lead {
+        margin: 24px 0 0;
+        max-width: 620px;
         color: var(--muted);
-        font-size: clamp(15px, 3.5vw, 18px);
+        font-size: clamp(19px, 3vw, 25px);
+        line-height: 1.25;
+        letter-spacing: -0.02em;
       }
 
-      .hero-actions {
-        margin-top: 22px;
+      .actions {
+        margin-top: 32px;
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
+        gap: 12px;
       }
 
-      .btn {
-        appearance: none;
-        border: 1px solid transparent;
-        border-radius: 999px;
-        min-height: 44px;
-        padding: 0 16px;
+      button {
         font: inherit;
-        font-size: 14px;
-        font-weight: 600;
-        letter-spacing: -0.01em;
+      }
+
+      .button {
+        appearance: none;
+        min-height: 42px;
+        padding: 0 18px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        background: var(--blue);
+        color: #fff;
+        font-size: 15px;
+        font-weight: 500;
         cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
       }
 
-      .btn-primary {
-        background: var(--brand);
-        color: #ffffff;
+      .button.secondary {
+        background: transparent;
+        color: var(--blue);
       }
 
-      .btn-secondary {
-        background: #ffffff;
-        border-color: var(--line);
-        color: var(--brand-soft);
-      }
-
-      .stats {
-        margin-top: 14px;
+      .grid {
         display: grid;
-        gap: 10px;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .stat {
-        border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.78);
-        border-radius: var(--radius-md);
-        padding: 12px;
-      }
-
-      .stat strong {
-        display: block;
-        font-size: 18px;
-      }
-
-      .stat span {
-        color: var(--muted);
-        font-size: 12px;
+        gap: 36px;
+        margin-top: 54px;
       }
 
       .section {
-        margin-top: 14px;
-        background: rgba(255, 255, 255, 0.92);
-        border: 1px solid var(--line);
-        border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-card);
-        padding: 18px;
+        display: grid;
+        gap: 18px;
+        padding-bottom: 42px;
+        border-bottom: 1px solid var(--line-soft);
       }
 
       .section h2 {
-        margin: 4px 0 8px;
-        font-size: clamp(22px, 6.5vw, 36px);
-        line-height: 1.1;
-        letter-spacing: -0.03em;
+        margin: 0;
+        font-size: clamp(28px, 5vw, 48px);
+        line-height: 1.05;
+        letter-spacing: -0.045em;
       }
 
       .section p {
         margin: 0;
+        max-width: 620px;
         color: var(--muted);
       }
 
-      .feature-grid {
-        margin-top: 14px;
+      .table {
         display: grid;
-        gap: 10px;
+        border-top: 1px solid var(--line-soft);
       }
 
-      .feature {
+      .row {
         display: grid;
-        grid-template-columns: 40px 1fr;
-        gap: 10px;
-        align-items: start;
-        border: 1px solid var(--line);
-        border-radius: var(--radius-md);
-        padding: 12px;
-        background: #ffffff;
+        grid-template-columns: minmax(120px, 180px) 1fr;
+        gap: 16px;
+        padding: 15px 0;
+        border-bottom: 1px solid var(--line-soft);
       }
 
-      .feature-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 12px;
-        background: #eef2ff;
-        color: #4338ca;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+      .row strong {
+        font-size: 15px;
+        font-weight: 600;
       }
 
-      .feature h3 {
-        margin: 1px 0 4px;
+      .row span {
+        color: var(--muted);
         font-size: 15px;
       }
 
-      .feature p {
-        font-size: 13px;
+      .control-panel {
+        display: grid;
+        gap: 14px;
+        width: min(100%, 720px);
+        padding: 20px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius);
+        background: var(--fill);
       }
 
-      .controls {
-        margin-top: 14px;
-        display: grid;
+      .control-row {
+        display: flex;
+        flex-wrap: wrap;
         gap: 10px;
       }
 
-      .control-block {
-        border: 1px solid var(--line);
-        background: #ffffff;
-        border-radius: var(--radius-md);
-        padding: 12px;
-      }
-
-      .control-title {
-        margin: 0 0 8px;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }
-
-      .chip-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-
-      .chip {
+      .pill {
         appearance: none;
-        font: inherit;
-        font-size: 13px;
-        font-weight: 600;
-        border: 1px solid var(--line-strong);
-        background: var(--surface-soft);
-        color: var(--brand-soft);
-        border-radius: 999px;
         min-height: 36px;
-        padding: 0 12px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--text);
+        font-size: 14px;
         cursor: pointer;
       }
 
-      .cards {
-        margin-top: 14px;
-        display: grid;
-        gap: 10px;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+      .pill.primary {
+        background: var(--text);
+        border-color: var(--text);
+        color: #fff;
       }
 
-      .card {
-        border: 1px solid var(--line);
-        border-radius: var(--radius-md);
-        background: #ffffff;
-        padding: 14px;
+      .state-line {
+        margin: 2px 0 0;
+        color: var(--muted-2);
+        font-size: 13px;
       }
 
-      .card strong {
-        display: block;
-        margin-bottom: 4px;
+      .edge-status {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
       }
 
-      .card span {
+      .edge-status li {
+        padding: 5px 9px;
+        border: 1px solid var(--line-soft);
+        border-radius: 999px;
+        background: #fff;
         color: var(--muted);
         font-size: 12px;
       }
 
-      .card button {
-        margin-top: 10px;
-        width: 100%;
+      .tap-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .tap-card {
+        min-height: 96px;
+        padding: 16px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius);
+        background: #fff;
+      }
+
+      .tap-card strong {
+        display: block;
+        font-size: 15px;
+      }
+
+      .tap-card span {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 13px;
       }
 
       .footer {
-        margin-top: 14px;
-        padding: 12px 6px 0;
+        margin-top: 42px;
         display: flex;
-        flex-wrap: wrap;
         justify-content: space-between;
-        gap: 10px;
+        gap: 16px;
         color: var(--muted);
-        font-size: 12px;
+        font-size: 13px;
       }
 
       code {
-        border: 1px solid var(--line);
-        background: #ffffff;
+        padding: 2px 7px;
         border-radius: 999px;
-        padding: 3px 8px;
+        background: var(--fill);
+        color: var(--text);
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 12px;
       }
 
       smooth-drawer {
         --drawer-radius: 32px;
-        --drawer-content-padding-x: 20px;
+        --drawer-content-padding-x: 22px;
         --drawer-content-padding-top: 12px;
       }
 
       smooth-drawer h2 {
-        margin: 0 0 4px;
-        font-size: 22px;
-        letter-spacing: -0.02em;
+        margin: 0;
+        font-size: 28px;
+        line-height: 1.08;
+        letter-spacing: -0.04em;
       }
 
       .drawer-intro {
-        margin: 0;
-        font-size: 13px;
-        color: #64748b;
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 14px;
       }
 
       .demo-form {
         display: grid;
-        gap: 16px;
-        margin-top: 12px;
+        gap: 18px;
+        margin-top: 20px;
       }
 
       .form-grid {
         display: grid;
-        gap: 12px;
+        gap: 14px;
       }
 
       smooth-drawer label {
         display: grid;
-        gap: 6px;
-        font-size: 13px;
+        gap: 7px;
+        color: #1d1d1f;
+        font-size: 14px;
         font-weight: 600;
-        color: #334155;
       }
 
       smooth-drawer input,
       smooth-drawer select,
       smooth-drawer textarea {
         appearance: none;
-        background: #f8fafc;
         width: 100%;
-        border: 1px solid #dbe1ea;
+        border: 1px solid #d2d2d7;
         border-radius: 12px;
-        box-sizing: border-box;
-        color: #0f172a;
-        font: 400 16px/1.45 "Inter", ui-sans-serif, system-ui, sans-serif;
+        background: #f5f5f7;
+        color: #1d1d1f;
+        font: 400 16px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
         padding: 13px 14px;
-        transition: border-color 120ms ease, background 120ms ease;
       }
 
       smooth-drawer input:focus,
       smooth-drawer select:focus,
       smooth-drawer textarea:focus {
-        outline: none;
-        background: #ffffff;
-        border-color: #3b82f6;
+        outline: 3px solid rgba(0, 102, 204, 0.16);
+        border-color: var(--blue);
+        background: #fff;
       }
 
       smooth-drawer input:-webkit-autofill,
@@ -426,10 +367,10 @@
       smooth-drawer input:-webkit-autofill:active,
       smooth-drawer textarea:-webkit-autofill,
       smooth-drawer select:-webkit-autofill {
-        -webkit-text-fill-color: #0f172a;
-        -webkit-box-shadow: 0 0 0 1000px #f8fafc inset;
-        box-shadow: 0 0 0 1000px #f8fafc inset;
-        caret-color: #0f172a;
+        -webkit-text-fill-color: #1d1d1f;
+        -webkit-box-shadow: 0 0 0 1000px #f5f5f7 inset;
+        box-shadow: 0 0 0 1000px #f5f5f7 inset;
+        caret-color: #1d1d1f;
         transition: background-color 9999s ease-out, color 9999s ease-out;
       }
 
@@ -441,7 +382,7 @@
       }
 
       smooth-drawer textarea {
-        min-height: 96px;
+        min-height: 104px;
         resize: vertical;
       }
 
@@ -449,58 +390,71 @@
       .drawer-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 10px;
       }
 
       .form-actions button,
       .drawer-actions button {
         appearance: none;
-        font: inherit;
-        border-radius: 999px;
         min-height: 38px;
-        padding: 0 14px;
+        padding: 0 15px;
+        border-radius: 999px;
+        border: 1px solid #d2d2d7;
+        background: #fff;
+        color: var(--blue);
+        font-size: 14px;
         cursor: pointer;
-        border: 1px solid #dbe1ea;
-        background: #ffffff;
-        color: #334155;
-        font-size: 13px;
-        font-weight: 600;
       }
 
       .form-actions button[type="submit"] {
-        background: #0f172a;
-        color: #ffffff;
-        border-color: transparent;
+        background: var(--blue);
+        border-color: var(--blue);
+        color: #fff;
       }
 
-      @media (min-width: 760px) {
-        .shell {
-          padding: 0 20px 120px;
-        }
-
-        .hero-card {
-          padding: 30px;
-        }
-
-        .stats {
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-        }
-
-        .feature-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .controls {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-
-        .cards {
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+      @media (min-width: 740px) {
+        .grid {
+          grid-template-columns: minmax(0, 1fr);
         }
 
         .form-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 14px;
+        }
+
+        .tap-grid {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 560px) {
+        .shell {
+          padding: 38px 16px 100px;
+        }
+
+        .nav-inner {
+          height: auto;
+          min-height: 52px;
+          padding: 0 16px;
+          align-items: flex-start;
+          flex-direction: column;
+          justify-content: center;
+          gap: 4px;
+        }
+
+        .nav-links {
+          gap: 12px;
+          overflow-x: auto;
+          width: 100%;
+          padding-bottom: 8px;
+        }
+
+        .row {
+          grid-template-columns: 1fr;
+          gap: 4px;
+        }
+
+        .footer {
+          display: grid;
         }
       }
     </style>
@@ -508,167 +462,111 @@
   <body>
     <header class="nav">
       <div class="nav-inner">
-        <a class="brand" href="/">
-          <span class="brand-badge" aria-hidden="true"></span>
-          @despia/drawer
-        </a>
+        <a class="brand" href="/">@despia/drawer</a>
         <nav class="nav-links" aria-label="Primary">
-          <a class="link-chip" href="https://github.com/despia-native/despia-drawer" target="_blank" rel="noreferrer">GitHub</a>
-          <a class="link-chip" href="https://www.npmjs.com/package/@despia/drawer" target="_blank" rel="noreferrer">npm</a>
-          <a class="link-chip" href="https://setup.despia.com/introduction" target="_blank" rel="noreferrer">Despia</a>
+          <a href="https://github.com/despia-native/despia-drawer" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="https://www.npmjs.com/package/@despia/drawer" target="_blank" rel="noreferrer">npm</a>
+          <a href="https://setup.despia.com/introduction" target="_blank" rel="noreferrer">Despia</a>
         </nav>
       </div>
     </header>
 
     <main class="shell">
       <section class="hero">
-        <article class="hero-card">
-          <p class="eyebrow">Open source · native feel</p>
-          <h1>Bottom sheet motion that feels iOS-smooth.</h1>
-          <p class="hero-lead">
-            Built on native scroll-snap and compositor scrolling. Works in React, Vue, Svelte, Angular, or plain HTML
-            while staying fast and predictable on mobile.
-          </p>
-          <div class="hero-actions">
-            <button type="button" class="btn btn-primary" data-open="large">Open drawer</button>
-            <button type="button" class="btn btn-secondary" data-open="peek">Peek detent</button>
-            <button type="button" class="btn btn-secondary" data-close>Close</button>
-          </div>
-          <div class="stats">
-            <div class="stat">
-              <strong>60fps</strong>
-              <span>Compositor first</span>
-            </div>
-            <div class="stat">
-              <strong>5 modes</strong>
-              <span>Detents + snap control</span>
-            </div>
-            <div class="stat">
-              <strong>1 component</strong>
-              <span>Cross-framework API</span>
-            </div>
-            <div class="stat">
-              <strong>100%</strong>
-              <span>Mobile responsive demo</span>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section class="section">
-        <p class="eyebrow">Highlights</p>
-        <h2>Minimal shell. Real behavior.</h2>
-        <p>
-          This demo focuses on the production details: keyboard-safe form focus, smooth inner scrolling, and predictable
-          layering when drawers stack.
+        <p class="eyebrow">Web Component · iOS-style drawer</p>
+        <h1>A bottom sheet that behaves like it belongs on the device.</h1>
+        <p class="lead">
+          Native scroll snap, named detents, keyboard-aware forms, stack layering, and PWA haptics in one small custom element.
         </p>
-        <div class="feature-grid">
-          <article class="feature">
-            <span class="feature-icon" aria-hidden="true">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M6 12h12M12 6l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </span>
-            <div>
-              <h3>Native momentum</h3>
-              <p>Scroll physics come from the browser, not JS transform loops.</p>
-            </div>
-          </article>
-          <article class="feature">
-            <span class="feature-icon" aria-hidden="true">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8" />
-                <path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-              </svg>
-            </span>
-            <div>
-              <h3>Safe keyboard UX</h3>
-              <p>Keyboard inputs get guard rails without breaking date/file/select controls.</p>
-            </div>
-          </article>
-          <article class="feature">
-            <span class="feature-icon" aria-hidden="true">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M5 8h14M5 12h14M5 16h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-              </svg>
-            </span>
-            <div>
-              <h3>Layered stack support</h3>
-              <p>New drawer opens on top; previous drawer stays locked behind it.</p>
-            </div>
-          </article>
-          <article class="feature">
-            <span class="feature-icon" aria-hidden="true">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M7 17h10M8 7l4-3 4 3v8a4 4 0 1 1-8 0V7Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </span>
-            <div>
-              <h3>Despia-ready</h3>
-              <p>Same component runs in browser, and can integrate deeper in Despia Native.</p>
-            </div>
-          </article>
+        <div class="actions">
+          <button type="button" class="button" data-open="large">Open drawer</button>
+          <button type="button" class="button secondary" data-open="peek">Preview peek</button>
         </div>
       </section>
 
-      <section class="section">
-        <p class="eyebrow">Controls</p>
-        <h2>Try every state quickly.</h2>
-        <p>Use these controls to validate detents, mode, theme, and click-through behavior on any screen size.</p>
-        <div class="controls">
-          <article class="control-block">
-            <p class="control-title">Detents</p>
-            <div class="chip-row">
-              <button class="chip" type="button" data-open="peek">Peek</button>
-              <button class="chip" type="button" data-open="medium">Medium</button>
-              <button class="chip" type="button" data-open="large">Large</button>
-              <button class="chip" type="button" data-close>Close</button>
+      <div class="grid">
+        <section class="section">
+          <h2>Designed for the rough edges.</h2>
+          <p>
+            This page is intentionally plain so you can see what matters: keyboard focus, content scrolling, backdrop behavior,
+            detent changes, and click-through surfaces behind the sheet.
+          </p>
+          <div class="table" aria-label="Feature summary">
+            <div class="row">
+              <strong>Motion</strong>
+              <span>CSS scroll snap with native browser momentum. No JavaScript drag loop.</span>
             </div>
-          </article>
-          <article class="control-block">
-            <p class="control-title">Behavior</p>
-            <div class="chip-row">
-              <button class="chip" type="button" data-mode>Toggle snap mode</button>
-              <button class="chip" type="button" data-theme>Toggle theme</button>
+            <div class="row">
+              <strong>Keyboard</strong>
+              <span>Uses `interactive-widget=resizes-content` when available, with a focused fallback lock.</span>
             </div>
-          </article>
-          <article class="control-block">
-            <p class="control-title">Sheet API</p>
-            <div class="chip-row">
-              <button class="chip" type="button" data-next>Next detent</button>
-              <button class="chip" type="button" data-prev>Previous detent</button>
+            <div class="row">
+              <strong>Inputs</strong>
+              <span>Text, select, date, time, file, textarea, autofill, and long-form inner scrolling.</span>
             </div>
-          </article>
-        </div>
-        <div class="cards">
-          <article class="card">
-            <strong>Orders</strong>
-            <span>Tap-through tile test</span>
-            <button type="button" class="chip" onclick="alert('Orders tile reached!')">Tap</button>
-          </article>
-          <article class="card">
-            <strong>Wallet</strong>
-            <span>Tap-through tile test</span>
-            <button type="button" class="chip" onclick="alert('Wallet tile reached!')">Tap</button>
-          </article>
-          <article class="card">
-            <strong>Messages</strong>
-            <span>Tap-through tile test</span>
-            <button type="button" class="chip" onclick="alert('Messages tile reached!')">Tap</button>
-          </article>
-          <article class="card">
-            <strong>Settings</strong>
-            <span>Tap-through tile test</span>
-            <button type="button" class="chip" onclick="alert('Settings tile reached!')">Tap</button>
-          </article>
-        </div>
-      </section>
+            <div class="row">
+              <strong>Stacking</strong>
+              <span>Opening a second drawer layers it above the previous one and locks the older sheet behind it.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>Controls</h2>
+          <p>Use these to test detents, snap mode, theming, and the public methods without leaving the page.</p>
+          <div class="control-panel">
+            <div class="control-row" aria-label="Detent controls">
+              <button class="pill" type="button" data-open="peek">Peek</button>
+              <button class="pill" type="button" data-open="medium">Medium</button>
+              <button class="pill primary" type="button" data-open="large">Large</button>
+              <button class="pill" type="button" data-close>Close</button>
+            </div>
+            <div class="control-row" aria-label="Behavior controls">
+              <button class="pill" type="button" data-next>Next</button>
+              <button class="pill" type="button" data-prev>Previous</button>
+              <button class="pill" type="button" data-mode>Toggle snap mode</button>
+              <button class="pill" type="button" data-theme>Toggle theme</button>
+              <button class="pill" type="button" data-dismissable>Lock dismissal</button>
+              <button class="pill" type="button" data-open-secondary>Open second drawer</button>
+            </div>
+            <p class="state-line">Current state: <span id="page-state">peek · init</span></p>
+            <ul class="edge-status" aria-label="Runtime status">
+              <li id="keyboard-status">Keyboard: resizes-content</li>
+              <li id="dismiss-status">Dismissable: yes</li>
+              <li>Haptics: iOS switch + vibration fallback</li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>Backdrop click-through test</h2>
+          <p>At partial detents, the clipped track should let the page below remain reachable where the drawer is not covering it.</p>
+          <div class="tap-grid">
+            <button type="button" class="tap-card" onclick="alert('Orders reached')">
+              <strong>Orders</strong>
+              <span>Tap target</span>
+            </button>
+            <button type="button" class="tap-card" onclick="alert('Wallet reached')">
+              <strong>Wallet</strong>
+              <span>Tap target</span>
+            </button>
+            <button type="button" class="tap-card" onclick="alert('Messages reached')">
+              <strong>Messages</strong>
+              <span>Tap target</span>
+            </button>
+            <button type="button" class="tap-card" onclick="alert('Settings reached')">
+              <strong>Settings</strong>
+              <span>Tap target</span>
+            </button>
+          </div>
+        </section>
+      </div>
 
       <footer class="footer">
-        <span>Despia Drawer demo · MIT</span>
+        <span>Despia Drawer demo</span>
         <span>
-          <code id="version-label">v0.0.18</code>
-          <a href="https://setup.despia.com" target="_blank" rel="noreferrer">Built for Despia Native</a>
+          <code id="version-label">v0.0.19</code>
+          <a href="https://setup.despia.com" target="_blank" rel="noreferrer">Despia Native</a>
         </span>
       </footer>
     </main>
@@ -683,8 +581,8 @@
       hide-scrollbar
       smart-keyboard
     >
-      <h2>Account details</h2>
-      <p id="state" class="drawer-intro">Waiting for state...</p>
+      <h2 data-drawer-title>Account details</h2>
+      <p id="state" class="drawer-intro">peek · init</p>
       <form class="demo-form">
         <div class="form-grid">
           <label>
@@ -759,11 +657,34 @@
       </div>
     </smooth-drawer>
 
+    <smooth-drawer
+      id="secondaryDrawer"
+      detents="closed:0, medium:54vh, large:86vh"
+      detent="closed"
+      backdrop="proportional"
+      snap-mode="momentum"
+      hide-scrollbar
+    >
+      <h2 data-drawer-title>Second drawer</h2>
+      <p class="drawer-intro">This drawer opens above the account sheet and locks the first one behind it.</p>
+      <div class="drawer-actions">
+        <button type="button" data-close-secondary>Close second drawer</button>
+      </div>
+    </smooth-drawer>
+
     <script type="module">
       import '../../dist/index.js';
 
       const drawer = document.getElementById('drawer');
+      const secondaryDrawer = document.getElementById('secondaryDrawer');
       const state = document.getElementById('state');
+      const pageState = document.getElementById('page-state');
+      const dismissStatus = document.getElementById('dismiss-status');
+      const keyboardStatus = document.getElementById('keyboard-status');
+
+      keyboardStatus.textContent = document.querySelector('meta[name="viewport"]')?.content.includes('interactive-widget=resizes-content')
+        ? 'Keyboard: resizes-content'
+        : 'Keyboard: fallback lock';
 
       document.querySelectorAll('[data-open]').forEach((button) => {
         button.addEventListener('click', () => drawer.show(button.dataset.open));
@@ -772,12 +693,33 @@
         button.addEventListener('click', () => drawer.hide());
       });
 
-      document.querySelector('[data-next]').addEventListener('click', () => drawer.next());
-      document.querySelector('[data-prev]').addEventListener('click', () => drawer.previous());
+      document.querySelectorAll('[data-next]').forEach((button) => {
+        button.addEventListener('click', () => drawer.next());
+      });
+      document.querySelectorAll('[data-prev]').forEach((button) => {
+        button.addEventListener('click', () => drawer.previous());
+      });
+
+      document.querySelector('[data-dismissable]').addEventListener('click', (event) => {
+        const locked = drawer.getAttribute('dismissable') !== 'false';
+        if (locked) drawer.setAttribute('dismissable', 'false');
+        else drawer.removeAttribute('dismissable');
+        event.currentTarget.textContent = locked ? 'Unlock dismissal' : 'Lock dismissal';
+        dismissStatus.textContent = locked ? 'Dismissable: no' : 'Dismissable: yes';
+      });
+
+      document.querySelector('[data-open-secondary]').addEventListener('click', () => {
+        drawer.show('medium');
+        secondaryDrawer.show('large');
+      });
+
+      document.querySelector('[data-close-secondary]').addEventListener('click', () => {
+        secondaryDrawer.hide();
+      });
 
       document.querySelector('.demo-form').addEventListener('submit', (event) => {
         event.preventDefault();
-        state.textContent = 'Saved without leaving the page.';
+        state.textContent = 'Saved · form stayed in place';
       });
 
       document.querySelector('[data-theme]').addEventListener('click', () => {
@@ -790,7 +732,9 @@
       });
 
       drawer.addEventListener('detent-change', (event) => {
-        state.textContent = `${event.detail.detent} · ${event.detail.trigger}`;
+        const value = `${event.detail.detent} · ${event.detail.trigger}`;
+        state.textContent = value;
+        pageState.textContent = value;
       });
     </script>
   </body>

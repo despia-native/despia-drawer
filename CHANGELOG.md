@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.19
+
+- Hardened iOS/PWA edge cases around focus locks, viewport meta normalization, keyboard padding, stacked drawer handoff, and dismissable scroll clamping.
+- Added unique hidden switch haptic targets per drawer and expanded regression coverage.
+- Refined the vanilla demo into a minimal Apple Developer-style edge-case verification page.
+
 ## 0.0.18
 
 - Reverted visual viewport top compensation after it caused fixed host chrome to drift during input focus.

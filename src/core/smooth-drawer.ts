@@ -98,6 +98,8 @@ export class SmoothDrawer extends HTMLElement {
   private static readonly _stackBaseZIndex = 999;
   private static _openStack: SmoothDrawer[] = [];
   private static _titleIdCounter = 0;
+  private static _instanceIdCounter = 0;
+  private readonly _instanceId = ++SmoothDrawer._instanceIdCounter;
 
   private _track!: HTMLDivElement;
   private _backdrop!: HTMLDivElement;
@@ -150,6 +152,8 @@ export class SmoothDrawer extends HTMLElement {
   private _lastProgressEmit = -1;
   private _lastProgressDetent: string | null = null;
   private _inertSnapshots: InertSnapshot[] = [];
+  private _managedLabelledBy: string | null = null;
+  private _clampingDismissalScroll = false;
 
   private _smartKeyboard: SmartKeyboardState = {
     previousDetent: null,
@@ -390,8 +394,8 @@ export class SmoothDrawer extends HTMLElement {
           </div>
         </div>
       </div>
-      <label class="haptic-switch" part="haptic-switch" for="smooth-drawer-haptic-switch" aria-hidden="true">
-        <input id="smooth-drawer-haptic-switch" type="checkbox" switch tabindex="-1" />
+      <label class="haptic-switch" part="haptic-switch" for="smooth-drawer-haptic-switch-${this._instanceId}" aria-hidden="true">
+        <input id="smooth-drawer-haptic-switch-${this._instanceId}" type="checkbox" switch tabindex="-1" />
       </label>
     `;
 
@@ -749,7 +753,7 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _activateOpenGuards(): void {
-    if (!this.isOpen || !this._focusedTextInput) return;
+    if (!this.isConnected || !this.isOpen || !this._focusedTextInput) return;
     if (this.hasAttribute('smart-keyboard')) this._ensureResizableViewportMeta();
     this._setFocusLockState('engaged');
   }
@@ -806,8 +810,16 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _engageFocusLock(previous: FocusLockState): void {
-    if (!this._focusedTextInput || !this.isOpen) return;
+    if (!this.isConnected || !this._focusedTextInput || !this.isOpen || !this._isTopMostInStack()) {
+      this._focusLockState = 'idle';
+      return;
+    }
     if (previous === 'engaged' && this._viewportGuardActive) return;
+
+    if (this._viewportGuardActive || this._pageScrollLock || this._htmlLockSnapshot) {
+      this._releaseFocusLock();
+      this._focusLockState = 'engaged';
+    }
 
     this._viewportGuardScrollY = window.scrollY;
     this._focusLockMode = this._shouldUseResizableViewportLock() ? 'resizes-content' : 'body-fixed';
@@ -856,10 +868,17 @@ export class SmoothDrawer extends HTMLElement {
       document.head?.appendChild(meta);
     }
 
-    const content = meta.content || '';
-    if (!/interactive-widget\s*=/.test(content)) {
-      meta.content = `${content}${content.trim() ? ', ' : ''}interactive-widget=resizes-content`;
-    }
+    meta.content = this._normalizedViewportContent(meta.content || '');
+  }
+
+  private _normalizedViewportContent(content: string): string {
+    const directives = content
+      .split(',')
+      .map(part => part.trim())
+      .filter(Boolean)
+      .filter(part => !/^interactive-widget\s*=/i.test(part));
+    directives.push('interactive-widget=resizes-content');
+    return directives.join(', ');
   }
 
   private _shouldUseResizableViewportLock(): boolean {
@@ -1166,10 +1185,14 @@ export class SmoothDrawer extends HTMLElement {
   }
 
   private _clampDismissalScroll(): boolean {
-    if (this._isDismissable() || !this.isOpen) return false;
+    if (this._clampingDismissalScroll || this._isDismissable() || !this.isOpen) return false;
     const lowestOpen = this._detents.find(d => d.name !== 'closed');
     if (!lowestOpen || this._track.scrollTop >= lowestOpen.offset - 4) return false;
+    this._clampingDismissalScroll = true;
     this._track.scrollTo({ top: lowestOpen.offset, behavior: 'auto' });
+    requestAnimationFrame(() => {
+      this._clampingDismissalScroll = false;
+    });
     return true;
   }
 
@@ -1229,7 +1252,10 @@ export class SmoothDrawer extends HTMLElement {
     } else {
       this.removeAttribute('role');
       this.removeAttribute('aria-modal');
-      this.removeAttribute('aria-labelledby');
+      if (this._managedLabelledBy && this.getAttribute('aria-labelledby') === this._managedLabelledBy) {
+        this.removeAttribute('aria-labelledby');
+      }
+      this._managedLabelledBy = null;
     }
 
     const shouldInert = open && this._cachedFullyOpen === true;
@@ -1239,12 +1265,14 @@ export class SmoothDrawer extends HTMLElement {
 
   private _syncLabelledBy(): void {
     const title = this.querySelector<HTMLElement>('[slot="title"], [data-drawer-title]');
+    if (!title && this.hasAttribute('aria-labelledby')) return;
     if (!title) return;
     if (!title.id) {
       SmoothDrawer._titleIdCounter += 1;
       title.id = `smooth-drawer-title-${SmoothDrawer._titleIdCounter}`;
     }
     this.setAttribute('aria-labelledby', title.id);
+    this._managedLabelledBy = title.id;
   }
 
   private _applyInertSiblings(): void {
@@ -1473,7 +1501,10 @@ export class SmoothDrawer extends HTMLElement {
     const viewport = window.visualViewport;
     if (!viewport) return;
     if (!this.isOpen || !this._focusedTextInput) return;
-    const keyboardHeight = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+    const viewportBottom = viewport.offsetTop + viewport.height;
+    const bottomInset = Math.max(0, window.innerHeight - viewportBottom);
+    const shrinkInset = Math.max(0, window.innerHeight - viewport.height);
+    const keyboardHeight = Math.max(bottomInset, shrinkInset - Math.max(0, viewport.offsetTop));
     this._smartKeyboard.keyboardHeight = keyboardHeight;
     this.classList.toggle('keyboard-active', keyboardHeight > 100);
     const extraPadding = Math.round(Math.min(140, window.innerHeight * KEYBOARD_EXTRA_PADDING_MAX_VH));
@@ -1588,6 +1619,8 @@ export class SmoothDrawer extends HTMLElement {
     const z = SmoothDrawer._stackBaseZIndex + layerIndex;
     this.style.setProperty('--drawer-z-index', `${z}`);
     this.classList.toggle('stacked-behind', !isTopMost);
+    if (isTopMost) this._activateGuardsForActiveInput();
+    else this._deactivateOpenGuards();
     this._updateBackdropOpacity();
     this._updateBackdrop();
     this._updateA11y();
