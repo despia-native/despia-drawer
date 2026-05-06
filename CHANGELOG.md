@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.21
+
+- Clamped focused-field auto-scroll so top text areas stay visible when keyboard space is tight.
+- Smoothed keyboard padding release on blur to avoid instant inner-content jumps.
+- Added regression coverage for top-field focus and keyboard spacer restoration.
+
 ## 0.0.20
 
 - Refined mobile touch gesture arbitration so inner content scrolling, sheet dragging, and taps/focus no longer fight each other.

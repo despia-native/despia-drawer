@@ -301,4 +301,63 @@ describe('smooth-drawer', () => {
 
     expect(scrollSpy).not.toHaveBeenCalledWith(expect.objectContaining({ top: expect.any(Number) }));
   });
+
+  it('does not push a top field above the drawer when keyboard space is tight', async () => {
+    const drawer = await createDrawer({ detents: 'closed:0, large:80vh', 'smart-keyboard': '' });
+    const content = drawer.shadowRoot?.querySelector('.content') as HTMLDivElement;
+    const input = document.createElement('textarea');
+    drawer.appendChild(input);
+    const scrollSpy = vi.spyOn(content, 'scrollTo');
+
+    Object.defineProperty(content, 'scrollHeight', { value: 1200, configurable: true });
+    Object.defineProperty(content, 'clientHeight', { value: 400, configurable: true });
+    content.scrollTop = 100;
+    content.getBoundingClientRect = () => ({
+      x: 0,
+      y: 0,
+      width: 390,
+      height: 400,
+      top: 0,
+      right: 390,
+      bottom: 400,
+      left: 0,
+      toJSON: () => ({})
+    });
+    input.getBoundingClientRect = () => ({
+      x: 0,
+      y: 18,
+      width: 320,
+      height: 54,
+      top: 18,
+      right: 320,
+      bottom: 72,
+      left: 0,
+      toJSON: () => ({})
+    });
+    Object.defineProperty(window, 'visualViewport', {
+      value: { offsetTop: 0, height: 80, width: 390, addEventListener() {}, removeEventListener() {} },
+      configurable: true
+    });
+
+    (drawer as unknown as { _scrollInputIntoDrawerView(input: HTMLElement): void })._scrollInputIntoDrawerView(input);
+
+    expect(scrollSpy).toHaveBeenCalledWith(expect.objectContaining({ top: 104 }));
+  });
+
+  it('smoothly restores inner scroll before removing keyboard padding', async () => {
+    const drawer = await createDrawer({ detents: 'closed:0, large:80vh', 'smart-keyboard': '' });
+    const content = drawer.shadowRoot?.querySelector('.content') as HTMLDivElement;
+    const scrollSpy = vi.spyOn(content, 'scrollTo');
+
+    Object.defineProperty(content, 'scrollHeight', { value: 1200, configurable: true });
+    Object.defineProperty(content, 'clientHeight', { value: 400, configurable: true });
+    content.scrollTop = 700;
+
+    (drawer as unknown as { _setContentPadding(value: string): void })._setContentPadding('360px');
+    (drawer as unknown as { _releaseKeyboardPaddingSmoothly(): void })._releaseKeyboardPaddingSmoothly();
+
+    expect(scrollSpy).toHaveBeenCalledWith(expect.objectContaining({ top: 440, behavior: 'smooth' }));
+    vi.advanceTimersByTime(280);
+    expect((drawer.shadowRoot?.querySelector('.keyboard-spacer') as HTMLElement).style.height).toBe('');
+  });
 });
